@@ -72,9 +72,13 @@ function loadCsv(file) {
     complete: results => {
       accounts = results.data
         .map((row, idx) => {
-          const lat = parseFloat(row["Latitude"]);
-          const lng = parseFloat(row["Longitude"]);
-          if (isNaN(lat) || isNaN(lng)) return null;
+          const latRaw = row["Latitude"];
+          const lngRaw = row["Longitude"];
+
+          const lat = parseFloat(String(latRaw).replace(/[^0-9.-]/g, ""));
+          const lng = parseFloat(String(lngRaw).replace(/[^0-9.-]/g, ""));
+
+          if (!lat || !lng) return null;
 
           return {
             customerId: String(row["Customer ID - DO NOT Remove"] ?? idx),
