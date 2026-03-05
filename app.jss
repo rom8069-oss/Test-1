@@ -1,371 +1,262 @@
+// ============================
+// CENTRAL STATE
+// ============================
 
-let map;
-let markers = [];
-let accounts = [];
-let selectedIds = new Set();
+const state = {
+  map: null,
+  clusterGroup: null,
+  accounts: [],
+  markersById: {},
+  selectedIds: new Set(),
+  repColors: {},
+  colorMode: "rep"
+};
 
-const fileInput = document.getElementById('file-input');
-const colorModeSelect = document.getElementById('color-mode');
-const repFilterSelect = document.getElementById('rep-filter');
-const repSelect = document.getElementById('rep-select');
-const assignBtn = document.getElementById('assign-btn');
-const exportBtn = document.getElementById('export-btn');
-const selectedCountEl = document.getElementById('selected-count');
-const selectedRevenueEl = document.getElementById('selected-revenue');
-const selectedListEl = document.getElementById('selected-list');
-const routeTableBody = document.querySelector('#route-table tbody');
-const detailPanel = document.getElementById('detail-panel');
-const searchInput = document.getElementById('search-input');
-const searchBtn = document.getElementById('search-btn');
+const colorPalette = [
+  "#e41a1c","#377eb8","#4daf4a","#984ea3",
+  "#ff7f00","#a65628","#f781bf","#999999"
+];
+
+// ============================
+// INIT MAP
+// ============================
 
 function initMap() {
-  map = L.map('map').setView([41.88, -87.63], 8);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19
-  }).addTo(map);
+  state.map = L.map('map').setView([41.88, -87.63], 8);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+    .addTo(state.map);
+
+  state.clusterGroup = L.markerClusterGroup();
+  state.map.addLayer(state.clusterGroup);
+
+  enableBoxSelect();
 }
 
-function safeField(row, keys) {
-  for (const k of keys) {
-    if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== "") {
-      return row[k];
-    }
-  }
-  return "";
-}
-
-function safeNumber(row, keys) {
-  const raw = safeField(row, keys);
-  if (raw === "") return 0;
-  const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ""));
-  return isNaN(num) ? 0 : num;
-}
+// ============================
+// CSV LOADING
+// ============================
 
 function loadCsv(file) {
-  console.log("loadCsv called with:", file.name);
-
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
     complete: results => {
-      console.log("RAW PARSED RESULTS:", results.data);
-
-      accounts = results.data.map((row, idx) => {
-        const lat = safeNumber(row, ["Latitude"]);
-        const lng = safeNumber(row, ["Longitude"]);
-        if (!lat || !lng) return null;
-
-        return {
-          customerId: String(safeField(row, ["Customer ID - DO NOT Remove"])) || String(idx),
-          stopId: String(safeField(row, ["Stop ID - DO NOT REMOVE"])),
-          currentDM: safeField(row, ["Current DM"]),
-          currentRep: safeField(row, ["Current Rep"]),
-          newRep: safeField(row, ["New Rep"]),
-          premise: safeField(row, ["Premise"]),
-          segment: safeField(row, ["Segment"]),
-          chain: safeField(row, ["Chain"]),
-          company: safeField(row, ["Company"]),
-          address: safeField(row, ["Address"]),
-          city: safeField(row, ["City"]),
-          zip: safeField(row, ["Zip Code"]),
-          county: safeField(row, ["County"]),
-          lat,
-          lng,
-          revenue: safeNumber(row, ["$ Vol Sept - Feb", "$ Vol Sept – Feb"])
-        };
-      }).filter(a => a && a.lat && a.lng);
-
-      console.log("ACCOUNTS CREATED:", accounts.length);
-
-      if (!accounts.length) {
-        alert("No valid rows found. Check Latitude/Longitude and headers.");
-        return;
-      }
+      state.accounts = results.data
+        .map(normalizeRow)
+        .filter(Boolean);
 
       buildRepLists();
       plotAccounts();
       updateRouteSummary();
-      exportBtn.disabled = false;
-    },
-    error: err => {
-      console.error("Papa.parse error:", err);
-      alert("Error reading CSV file.");
+      document.getElementById("export-btn").disabled = false;
     }
   });
 }
 
-function buildRepLists() {
-  const reps = new Set();
-  accounts.forEach(a => {
-    if (a.currentRep && a.currentRep.trim()) reps.add(a.currentRep.trim());
-    if (a.newRep && a.newRep.trim()) reps.add(a.newRep.trim());
-  });
-  reps.add("Rep 15");
-  reps.add("Rep 16");
+function normalizeRow(row, idx) {
+  const lat = parseFloat(row["Latitude"]);
+  const lng = parseFloat(row["Longitude"]);
+  if (!lat || !lng) return null;
 
-  const sorted = Array.from(reps).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-
-  repSelect.innerHTML = '<option value="">Assign to rep…</option>';
-  repFilterSelect.innerHTML = '<option value="">All reps</option>';
-
-  sorted.forEach(rep => {
-    const o1 = document.createElement('option');
-    o1.value = rep;
-    o1.textContent = rep;
-    repSelect.appendChild(o1);
-
-    const o2 = document.createElement('option');
-    o2.value = rep;
-    o2.textContent = rep;
-    repFilterSelect.appendChild(o2);
-  });
+  return {
+    id: row["Customer ID - DO NOT Remove"] || String(idx),
+    company: row["Company"] || "",
+    currentRep: row["Current Rep"] || "",
+    newRep: row["New Rep"] || "",
+    segment: row["Segment"] || "",
+    premise: row["Premise"] || "",
+    revenue: parseFloat(
+      String(row["$ Vol Sept - Feb"] || "0").replace(/[^0-9.-]/g, "")
+    ) || 0,
+    lat,
+    lng
+  };
 }
 
-function getDisplayRep(a) {
-  return (a.newRep && a.newRep.trim()) || (a.currentRep && a.currentRep.trim()) || "";
-}
+// ============================
+// MARKER RENDERING
+// ============================
 
 function plotAccounts() {
-  markers.forEach(m => map.removeLayer(m));
-  markers = [];
+  state.clusterGroup.clearLayers();
+  state.markersById = {};
 
   const bounds = [];
-  const colorPalette = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'teal', 'magenta', 'gold', 'navy'];
-  const repColors = {};
-  const segmentColors = {};
-  const premiseColors = {};
 
-  function colorForRep(rep) {
-    if (!rep) return 'gray';
-    if (!repColors[rep]) {
-      const idx = Object.keys(repColors).length % colorPalette.length;
-      repColors[rep] = colorPalette[idx];
-    }
-    return repColors[rep];
-  }
-
-  function colorForSegment(seg) {
-    if (!seg) return 'gray';
-    if (!segmentColors[seg]) {
-      const idx = Object.keys(segmentColors).length % colorPalette.length;
-      segmentColors[seg] = colorPalette[idx];
-    }
-    return segmentColors[seg];
-  }
-
-  function colorForPremise(p) {
-    if (!p) return 'gray';
-    if (!premiseColors[p]) {
-      const idx = Object.keys(premiseColors).length % colorPalette.length;
-      premiseColors[p] = colorPalette[idx];
-    }
-    return premiseColors[p];
-  }
-
-  const mode = colorModeSelect.value;
-  const repFilter = repFilterSelect.value;
-
-  accounts.forEach(acc => {
-    const rep = getDisplayRep(acc);
-    if (repFilter && rep !== repFilter) return;
-
-    let color;
-    if (mode === "rep") color = colorForRep(rep);
-    else if (mode === "segment") color = colorForSegment(acc.segment);
-    else color = colorForPremise(acc.premise);
-
+  state.accounts.forEach(acc => {
     const marker = L.circleMarker([acc.lat, acc.lng], {
-      radius: 5,
-      color,
-      fillColor: color,
-      fillOpacity: 0.85
+      radius: 6,
+      fillOpacity: 0.9
     });
 
-    marker.accountId = acc.customerId;
+    marker.on("click", e => handleMarkerClick(e, acc));
 
-    marker.on('click', () => {
-      selectedIds.clear();
-      selectedIds.add(acc.customerId);
-      updateSelectionSummary();
-      showAccountDetails(acc);
-    });
-
-    marker.addTo(map);
-    markers.push(marker);
+    state.clusterGroup.addLayer(marker);
+    state.markersById[acc.id] = marker;
     bounds.push([acc.lat, acc.lng]);
+
+    updateMarkerStyle(acc);
   });
 
   if (bounds.length) {
-    map.fitBounds(bounds, { padding: [20, 20] });
+    state.map.fitBounds(bounds, { padding: [20,20] });
   }
 }
 
-function updateSelectionSummary() {
-  const selected = accounts.filter(a => selectedIds.has(a.customerId));
-  const count = selected.length;
-  const revenue = selected.reduce((sum, a) => sum + (a.revenue || 0), 0);
+function updateMarkerStyle(acc) {
+  const marker = state.markersById[acc.id];
+  if (!marker) return;
 
-  selectedCountEl.textContent = count;
-  selectedRevenueEl.textContent = revenue.toFixed(2);
+  const rep = acc.newRep || acc.currentRep;
+  const color = getColor(rep);
 
-  selectedListEl.innerHTML = "";
-  selected.forEach(a => {
-    const li = document.createElement('li');
-    li.textContent = `${a.company || a.customerId} | $${a.revenue.toLocaleString()} | Rep: ${getDisplayRep(a) || "Unassigned"}`;
-    selectedListEl.appendChild(li);
+  marker.setStyle({
+    color: state.selectedIds.has(acc.id) ? "black" : color,
+    fillColor: color
+  });
+}
+
+function getColor(rep) {
+  if (!rep) return "#888";
+
+  if (!state.repColors[rep]) {
+    const idx = Object.keys(state.repColors).length % colorPalette.length;
+    state.repColors[rep] = colorPalette[idx];
+  }
+  return state.repColors[rep];
+}
+
+// ============================
+// SELECTION (MULTI + SHIFT)
+// ============================
+
+function handleMarkerClick(e, acc) {
+  if (!e.originalEvent.shiftKey) {
+    state.selectedIds.clear();
+  }
+
+  if (state.selectedIds.has(acc.id)) {
+    state.selectedIds.delete(acc.id);
+  } else {
+    state.selectedIds.add(acc.id);
+  }
+
+  updateAllMarkerStyles();
+  updateSelectionSummary();
+  showDetails(acc);
+}
+
+function updateAllMarkerStyles() {
+  state.accounts.forEach(updateMarkerStyle);
+}
+
+// ============================
+// BOX SELECT
+// ============================
+
+function enableBoxSelect() {
+  let start;
+
+  state.map.on("mousedown", e => {
+    if (!e.originalEvent.shiftKey) return;
+    start = e.latlng;
   });
 
-  assignBtn.disabled = !(count > 0 && repSelect.value);
+  state.map.on("mouseup", e => {
+    if (!start) return;
+
+    const bounds = L.latLngBounds(start, e.latlng);
+
+    state.accounts.forEach(acc => {
+      if (bounds.contains([acc.lat, acc.lng])) {
+        state.selectedIds.add(acc.id);
+      }
+    });
+
+    updateAllMarkerStyles();
+    updateSelectionSummary();
+    start = null;
+  });
 }
 
-function showAccountDetails(acc) {
-  detailPanel.innerHTML = `
-    <p><strong>$ Vol Sept–Feb:</strong> $${acc.revenue.toLocaleString()}</p>
-    <p><strong>Company:</strong> ${acc.company}</p>
-    <p><strong>Customer ID:</strong> ${acc.customerId}</p>
-    <p><strong>Stop ID:</strong> ${acc.stopId}</p>
-    <p><strong>Address:</strong> ${acc.address}, ${acc.city}, ${acc.zip}</p>
-    <p><strong>County:</strong> ${acc.county}</p>
-    <p><strong>Segment:</strong> ${acc.segment}</p>
-    <p><strong>Premise:</strong> ${acc.premise}</p>
-    <p><strong>Chain:</strong> ${acc.chain}</p>
-    <p><strong>Current DM:</strong> ${acc.currentDM}</p>
-    <p><strong>Current Rep:</strong> ${acc.currentRep}</p>
-    <p><strong>New Rep:</strong> ${acc.newRep || "Unassigned"}</p>
-    <p><strong>Lat / Lng:</strong> ${acc.lat}, ${acc.lng}</p>
-  `;
-}
+// ============================
+// ROUTE SUMMARY
+// ============================
 
 function updateRouteSummary() {
   const byRep = {};
-  accounts.forEach(a => {
-    const rep = getDisplayRep(a) || "Unassigned";
-    if (!byRep[rep]) byRep[rep] = { stops: 0, revenue: 0 };
-    byRep[rep].stops += 1;
-    byRep[rep].revenue += a.revenue || 0;
+
+  state.accounts.forEach(a => {
+    const rep = a.newRep || a.currentRep || "Unassigned";
+    if (!byRep[rep]) byRep[rep] = { stops:0, revenue:0 };
+    byRep[rep].stops++;
+    byRep[rep].revenue += a.revenue;
   });
 
-  routeTableBody.innerHTML = "";
-  Object.entries(byRep)
-    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
-    .forEach(([rep, stats]) => {
-      const tr = document.createElement('tr');
-      const avg = stats.stops ? stats.revenue / stats.stops : 0;
-      tr.innerHTML = `
-        <td>${rep}</td>
-        <td>${stats.stops}</td>
-        <td>$${stats.revenue.toFixed(2)}</td>
-        <td>$${avg.toFixed(2)}</td>
-      `;
-      routeTableBody.appendChild(tr);
-    });
+  const tbody = document.querySelector("#route-table tbody");
+  tbody.innerHTML = "";
+
+  Object.entries(byRep).forEach(([rep, stats]) => {
+    const tr = document.createElement("tr");
+    const avg = stats.revenue / stats.stops;
+
+    tr.innerHTML = `
+      <td>${rep}</td>
+      <td>${stats.stops}</td>
+      <td>$${stats.revenue.toLocaleString()}</td>
+      <td>$${avg.toLocaleString()}</td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
-function assignSelectedToRep() {
-  const rep = repSelect.value;
-  if (!rep || !selectedIds.size) return;
+// ============================
+// ASSIGNMENT
+// ============================
 
-  accounts.forEach(a => {
-    if (selectedIds.has(a.customerId)) {
-      a.newRep = rep;
+function assignSelected() {
+  const rep = document.getElementById("rep-select").value;
+  if (!rep) return;
+
+  state.accounts.forEach(acc => {
+    if (state.selectedIds.has(acc.id)) {
+      acc.newRep = rep;
     }
   });
 
-  plotAccounts();
-  updateSelectionSummary();
   updateRouteSummary();
+  updateAllMarkerStyles();
 }
 
+// ============================
+// EXPORT
+// ============================
+
 function exportCsv() {
-  if (!accounts.length) return;
-
-  const data = accounts.map(a => ({
-    "Customer ID - DO NOT Remove": a.customerId,
-    "Stop ID - DO NOT REMOVE": a.stopId,
-    "Current DM": a.currentDM,
-    "Current Rep": a.currentRep,
-    "New Rep": a.newRep,
-    "Premise": a.premise,
-    "Segment": a.segment,
-    "Chain": a.chain,
-    "Company": a.company,
-    "Address": a.address,
-    "City": a.city,
-    "Zip Code": a.zip,
-    "County": a.county,
-    "Latitude": a.lat,
-    "Longitude": a.lng,
-    "$ Vol Sept - Feb": a.revenue
-  }));
-
-  const csv = Papa.unparse(data);
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const csv = Papa.unparse(state.accounts);
+  const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'routes_with_new_rep.csv';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "updated_routes.csv";
+  a.click();
+
   URL.revokeObjectURL(url);
 }
 
-function searchAccounts() {
-  const q = searchInput.value.trim().toLowerCase();
-  if (!q) return;
+// ============================
+// EVENTS
+// ============================
 
-  const match = accounts.find(a =>
-    a.customerId.toLowerCase().includes(q) ||
-    (a.company && a.company.toLowerCase().includes(q))
-  );
+document.getElementById("file-input")
+  .addEventListener("change", e => loadCsv(e.target.files[0]));
 
-  if (!match) {
-    alert("No matching account found.");
-    return;
-  }
+document.getElementById("assign-btn")
+  .addEventListener("click", assignSelected);
 
-  map.setView([match.lat, match.lng], 14);
-  selectedIds.clear();
-  selectedIds.add(match.customerId);
-  updateSelectionSummary();
-  showAccountDetails(match);
-}
+document.getElementById("export-btn")
+  .addEventListener("click", exportCsv);
 
-// Events
-fileInput.addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (file) loadCsv(file);
-});
-
-colorModeSelect.addEventListener('change', () => {
-  plotAccounts();
-});
-
-repFilterSelect.addEventListener('change', () => {
-  plotAccounts();
-});
-
-repSelect.addEventListener('change', () => {
-  updateSelectionSummary();
-});
-
-assignBtn.addEventListener('click', () => {
-  assignSelectedToRep();
-});
-
-exportBtn.addEventListener('click', () => {
-  exportCsv();
-});
-
-searchBtn.addEventListener('click', () => {
-  searchAccounts();
-});
-
-searchInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') searchAccounts();
-});
-
-// Init
-window.addEventListener('DOMContentLoaded', () => {
-  initMap();
-});
+window.addEventListener("DOMContentLoaded", initMap);
