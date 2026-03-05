@@ -1,5 +1,8 @@
 window.addEventListener("DOMContentLoaded", () => {
 
+console.log("APP.JS LOADED");
+console.log("FILE INPUT ELEMENT:", fileInput);
+
 let map;
 let drawnItems;
 let markers = [];
@@ -67,6 +70,7 @@ function initMap() {
 }
 
 function loadCsv(file) {
+  console.log("loadCsv CALLED");
   Papa.parse(file, {
     header: true,
     dynamicTyping: true,
