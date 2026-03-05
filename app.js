@@ -9,6 +9,8 @@ const state = {
   markersById: {},
   selectedIds: new Set(),
   repColors: {},
+  segmentColors: {},
+  premiseColors: {},
   colorMode: "rep"
 };
 
@@ -56,44 +58,13 @@ function loadCsv(file) {
         return;
       }
 
-      function buildRepLists() {
-        const repSelect = document.getElementById("rep-select");
-        const repFilter = document.getElementById("rep-filter");
-
-        const reps = new Set();
-
-  state.accounts.forEach(a => {
-    if (a.currentRep) reps.add(a.currentRep.trim());
-    if (a.newRep) reps.add(a.newRep.trim());
-  });
-
-  reps.add("Rep 15");
-  reps.add("Rep 16");
-
-  const sorted = Array.from(reps).sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true })
-  );
-
-  repSelect.innerHTML = '<option value="">Assign to rep…</option>';
-  repFilter.innerHTML = '<option value="">All Reps</option>';
-
-  sorted.forEach(rep => {
-    const o1 = document.createElement("option");
-    o1.value = rep;
-    o1.textContent = rep;
-    repSelect.appendChild(o1);
-
-    const o2 = document.createElement("option");
-    o2.value = rep;
-    o2.textContent = rep;
-    repFilter.appendChild(o2);
-  });
-
-  document.getElementById("assign-btn").disabled = false;
-}
+      buildRepLists();
       plotAccounts();
       updateRouteSummary();
+      updateSelectionSummary();
+
       document.getElementById("export-btn").disabled = false;
+      document.getElementById("assign-btn").disabled = false;
     }
   });
 }
@@ -109,6 +80,7 @@ function getField(row, possibleKeys) {
 
 function getNumber(row, possibleKeys) {
   const raw = getField(row, possibleKeys);
+  if (raw === "") return 0;
   const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ""));
   return isNaN(num) ? 0 : num;
 }
@@ -133,6 +105,44 @@ function normalizeRow(row, idx) {
 }
 
 // ============================
+// REP LISTS
+// ============================
+
+function buildRepLists() {
+  const repSelect = document.getElementById("rep-select");
+  const repFilter = document.getElementById("rep-filter");
+
+  const reps = new Set();
+
+  state.accounts.forEach(a => {
+    if (a.currentRep && a.currentRep.trim()) reps.add(a.currentRep.trim());
+    if (a.newRep && a.newRep.trim()) reps.add(a.newRep.trim());
+  });
+
+  reps.add("Rep 15");
+  reps.add("Rep 16");
+
+  const sorted = Array.from(reps).sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true })
+  );
+
+  repSelect.innerHTML = '<option value="">Assign to rep…</option>';
+  repFilter.innerHTML = '<option value="">All Reps</option>';
+
+  sorted.forEach(rep => {
+    const o1 = document.createElement("option");
+    o1.value = rep;
+    o1.textContent = rep;
+    repSelect.appendChild(o1);
+
+    const o2 = document.createElement("option");
+    o2.value = rep;
+    o2.textContent = rep;
+    repFilter.appendChild(o2);
+  });
+}
+
+// ============================
 // MARKER RENDERING
 // ============================
 
@@ -141,8 +151,12 @@ function plotAccounts() {
   state.markersById = {};
 
   const bounds = [];
+  const repFilter = document.getElementById("rep-filter").value || "";
 
   state.accounts.forEach(acc => {
+    const displayRep = acc.newRep || acc.currentRep || "";
+    if (repFilter && displayRep !== repFilter) return;
+
     const marker = L.circleMarker([acc.lat, acc.lng], {
       radius: 6,
       fillOpacity: 0.9
@@ -166,8 +180,18 @@ function updateMarkerStyle(acc) {
   const marker = state.markersById[acc.id];
   if (!marker) return;
 
-  const rep = acc.newRep || acc.currentRep;
-  const color = getColor(rep);
+  const rep = acc.newRep || acc.currentRep || "";
+  const seg = acc.segment || "";
+  const prem = acc.premise || "";
+
+  let color;
+  if (state.colorMode === "rep") {
+    color = getColor(rep, "rep");
+  } else if (state.colorMode === "segment") {
+    color = getColor(seg, "segment");
+  } else {
+    color = getColor(prem, "premise");
+  }
 
   marker.setStyle({
     color: state.selectedIds.has(acc.id) ? "black" : color,
@@ -175,14 +199,19 @@ function updateMarkerStyle(acc) {
   });
 }
 
-function getColor(rep) {
-  if (!rep) return "#888";
+function getColor(key, type) {
+  if (!key) return "#888";
 
-  if (!state.repColors[rep]) {
-    const idx = Object.keys(state.repColors).length % colorPalette.length;
-    state.repColors[rep] = colorPalette[idx];
+  let map;
+  if (type === "rep") map = state.repColors;
+  else if (type === "segment") map = state.segmentColors;
+  else map = state.premiseColors;
+
+  if (!map[key]) {
+    const idx = Object.keys(map).length % colorPalette.length;
+    map[key] = colorPalette[idx];
   }
-  return state.repColors[rep];
+  return map[key];
 }
 
 // ============================
@@ -210,7 +239,7 @@ function updateAllMarkerStyles() {
 }
 
 // ============================
-// BOX SELECT
+// BOX SELECT (SHIFT + DRAG)
 // ============================
 
 function enableBoxSelect() {
@@ -236,6 +265,47 @@ function enableBoxSelect() {
     updateSelectionSummary();
     start = null;
   });
+}
+
+// ============================
+// SELECTION SUMMARY + DETAILS
+// ============================
+
+function updateSelectionSummary() {
+  const selected = state.accounts.filter(a => state.selectedIds.has(a.id));
+  const count = selected.length;
+  const revenue = selected.reduce((sum, a) => sum + (a.revenue || 0), 0);
+
+  document.getElementById("selected-count").textContent = count;
+  document.getElementById("selected-revenue").textContent = revenue.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+  const list = document.getElementById("selected-list");
+  list.innerHTML = "";
+  selected.forEach(a => {
+    const li = document.createElement("li");
+    li.textContent = `${a.company || a.id} | $${(a.revenue || 0).toLocaleString()} | Rep: ${a.newRep || a.currentRep || "Unassigned"}`;
+    list.appendChild(li);
+  });
+
+  const rep = document.getElementById("rep-select").value;
+  document.getElementById("assign-btn").disabled = !(count > 0 && rep);
+}
+
+function showDetails(acc) {
+  const panel = document.getElementById("detail-panel");
+  panel.innerHTML = `
+    <p><strong>Company:</strong> ${acc.company || ""}</p>
+    <p><strong>Customer ID:</strong> ${acc.id}</p>
+    <p><strong>Current Rep:</strong> ${acc.currentRep || ""}</p>
+    <p><strong>New Rep:</strong> ${acc.newRep || "Unassigned"}</p>
+    <p><strong>Segment:</strong> ${acc.segment || ""}</p>
+    <p><strong>Premise:</strong> ${acc.premise || ""}</p>
+    <p><strong>Revenue (Sept–Feb):</strong> $${(acc.revenue || 0).toLocaleString()}</p>
+    <p><strong>Lat / Lng:</strong> ${acc.lat}, ${acc.lng}</p>
+  `;
 }
 
 // ============================
@@ -285,6 +355,7 @@ function assignSelected() {
 
   updateRouteSummary();
   updateAllMarkerStyles();
+  updateSelectionSummary();
 }
 
 // ============================
@@ -305,6 +376,33 @@ function exportCsv() {
 }
 
 // ============================
+// SEARCH
+// ============================
+
+function searchAccounts() {
+  const input = document.getElementById("search-input");
+  const q = input.value.trim().toLowerCase();
+  if (!q) return;
+
+  const match = state.accounts.find(a =>
+    a.id.toLowerCase().includes(q) ||
+    (a.company && a.company.toLowerCase().includes(q))
+  );
+
+  if (!match) {
+    alert("No matching account found.");
+    return;
+  }
+
+  state.map.setView([match.lat, match.lng], 14);
+  state.selectedIds.clear();
+  state.selectedIds.add(match.id);
+  updateAllMarkerStyles();
+  updateSelectionSummary();
+  showDetails(match);
+}
+
+// ============================
 // EVENTS
 // ============================
 
@@ -316,5 +414,25 @@ document.getElementById("assign-btn")
 
 document.getElementById("export-btn")
   .addEventListener("click", exportCsv);
+
+document.getElementById("color-mode")
+  .addEventListener("change", e => {
+    state.colorMode = e.target.value;
+    updateAllMarkerStyles();
+  });
+
+document.getElementById("rep-filter")
+  .addEventListener("change", () => {
+    plotAccounts();
+    updateSelectionSummary();
+  });
+
+document.getElementById("search-btn")
+  .addEventListener("click", searchAccounts);
+
+document.getElementById("search-input")
+  .addEventListener("keydown", e => {
+    if (e.key === "Enter") searchAccounts();
+  });
 
 window.addEventListener("DOMContentLoaded", initMap);
