@@ -11,7 +11,8 @@ const state = {
   repColors: {},
   segmentColors: {},
   premiseColors: {},
-  colorMode: "rep"
+  colorMode: "rep",
+  hullLayers: []
 };
 
 const colorPalette = [
@@ -29,10 +30,50 @@ function initMap() {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
     .addTo(state.map);
 
-  state.clusterGroup = L.markerClusterGroup();
+  state.clusterGroup = createClusterGroup();
   state.map.addLayer(state.clusterGroup);
 
   enableBoxSelect();
+}
+
+// ============================
+// CUSTOM CLUSTER GROUP
+// ============================
+
+function createClusterGroup() {
+  return L.markerClusterGroup({
+    iconCreateFunction: function (cluster) {
+      const markers = cluster.getAllChildMarkers();
+
+      const repCounts = {};
+      markers.forEach(m => {
+        const acc = state.accounts.find(a => a.id === m.accountId);
+        const rep = acc?.newRep || acc?.currentRep || "Unassigned";
+        repCounts[rep] = (repCounts[rep] || 0) + 1;
+      });
+
+      const dominantRep = Object.entries(repCounts)
+        .sort((a, b) => b[1] - a[1])[0][0];
+
+      const color = getColor(dominantRep, "rep");
+
+      return L.divIcon({
+        html: `<div style="
+          background:${color};
+          color:white;
+          border-radius:50%;
+          width:40px;
+          height:40px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          border:2px solid black;
+        ">${cluster.getChildCount()}</div>`,
+        className: "rep-cluster-icon",
+        iconSize: [40, 40]
+      });
+    }
+  });
 }
 
 // ============================
@@ -44,14 +85,9 @@ function loadCsv(file) {
     header: true,
     skipEmptyLines: true,
     complete: results => {
-      console.log("HEADERS:", results.meta.fields);
-      console.log("FIRST ROW:", results.data[0]);
-
       state.accounts = results.data
         .map((row, idx) => normalizeRow(row, idx))
         .filter(Boolean);
-
-      console.log("ACCOUNTS LOADED:", state.accounts.length);
 
       if (!state.accounts.length) {
         alert("No valid accounts loaded. Check Latitude/Longitude headers.");
@@ -60,6 +96,7 @@ function loadCsv(file) {
 
       buildRepLists();
       plotAccounts();
+      drawRepTerritories();
       updateRouteSummary();
       updateSelectionSummary();
 
@@ -134,15 +171,8 @@ function buildRepLists() {
   repFilter.innerHTML = '<option value="">All Reps</option>';
 
   sorted.forEach(rep => {
-    const o1 = document.createElement("option");
-    o1.value = rep;
-    o1.textContent = rep;
-    repSelect.appendChild(o1);
-
-    const o2 = document.createElement("option");
-    o2.value = rep;
-    o2.textContent = rep;
-    repFilter.appendChild(o2);
+    repSelect.insertAdjacentHTML("beforeend", `<option value="${rep}">${rep}</option>`);
+    repFilter.insertAdjacentHTML("beforeend", `<option value="${rep}">${rep}</option>`);
   });
 }
 
@@ -166,6 +196,7 @@ function plotAccounts() {
       fillOpacity: 0.9
     });
 
+    marker.accountId = acc.id;
     marker.on("click", e => handleMarkerClick(e, acc));
 
     state.clusterGroup.addLayer(marker);
@@ -179,6 +210,10 @@ function plotAccounts() {
     state.map.fitBounds(bounds, { padding: [20,20] });
   }
 }
+
+// ============================
+// MARKER STYLE
+// ============================
 
 function updateMarkerStyle(acc) {
   const marker = state.markersById[acc.id];
@@ -220,7 +255,7 @@ function getColor(key, type) {
 }
 
 // ============================
-// SELECTION (MULTI + SHIFT)
+// SELECTION
 // ============================
 
 function handleMarkerClick(e, acc) {
@@ -244,7 +279,7 @@ function updateAllMarkerStyles() {
 }
 
 // ============================
-// BOX SELECT (SHIFT + DRAG)
+// BOX SELECT
 // ============================
 
 function enableBoxSelect() {
@@ -315,7 +350,7 @@ function showDetails(acc) {
 }
 
 // ============================
-// ROUTE SUMMARY
+// ROUTE SUMMARY (WITH COLOR SWATCH)
 // ============================
 
 function updateRouteSummary() {
@@ -332,11 +367,12 @@ function updateRouteSummary() {
   tbody.innerHTML = "";
 
   Object.entries(byRep).forEach(([rep, stats]) => {
-    const tr = document.createElement("tr");
+    const color = getColor(rep, "rep");
     const avg = stats.revenue / stats.stops;
 
+    const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${rep}</td>
+      <td><span style="display:inline-block;width:12px;height:12px;background:${color};border:1px solid #000;margin-right:6px;"></span>${rep}</td>
       <td>${stats.stops}</td>
       <td>$${stats.revenue.toLocaleString()}</td>
       <td>$${avg.toLocaleString()}</td>
@@ -359,6 +395,8 @@ function assignSelected() {
     }
   });
 
+  plotAccounts();
+  drawRepTerritories();
   updateRouteSummary();
   updateAllMarkerStyles();
   updateSelectionSummary();
@@ -419,6 +457,44 @@ function searchAccounts() {
 }
 
 // ============================
+// REP TERRITORIES (CONCAVE HULLS)
+// ============================
+
+function drawRepTerritories() {
+  state.hullLayers.forEach(layer => state.map.removeLayer(layer));
+  state.hullLayers = [];
+
+  const reps = {};
+
+  state.accounts.forEach(acc => {
+    const rep = acc.newRep || acc.currentRep || "Unassigned";
+    if (!reps[rep]) reps[rep] = [];
+    reps[rep].push([acc.lng, acc.lat]);
+  });
+
+  Object.entries(reps).forEach(([rep, coords]) => {
+    if (coords.length < 3) return;
+
+    const points = turf.points(coords);
+    const hull = turf.concave(points, { maxEdge: 1 });
+
+    if (!hull) return;
+
+    const color = getColor(rep, "rep");
+
+    const layer = L.geoJSON(hull, {
+      style: {
+        color,
+        weight: 2,
+        fillOpacity: 0.1
+      }
+    }).addTo(state.map);
+
+    state.hullLayers.push(layer);
+  });
+}
+
+// ============================
 // EVENTS
 // ============================
 
@@ -440,8 +516,12 @@ document.getElementById("color-mode")
 document.getElementById("rep-filter")
   .addEventListener("change", () => {
     plotAccounts();
+    drawRepTerritories();
     updateSelectionSummary();
   });
+
+document.getElementById("rep-select")
+  .addEventListener("change", updateSelectionSummary);
 
 document.getElementById("search-btn")
   .addEventListener("click", searchAccounts);
