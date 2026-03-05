@@ -70,6 +70,9 @@ function loadCsv(file) {
     dynamicTyping: true,
     skipEmptyLines: true,
     complete: results => {
+
+      console.log("RAW PARSED RESULTS:", results.data);
+
       accounts = results.data
         .map((row, idx) => {
           const latRaw = row["Latitude"];
@@ -100,6 +103,8 @@ function loadCsv(file) {
           };
         })
         .filter(Boolean);
+
+      console.log("ACCOUNTS CREATED:", accounts);
 
       buildRepLists();
       plotAccounts();
