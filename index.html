@@ -4,13 +4,21 @@
   <meta charset="UTF-8" />
   <title>Route & Rep Optimizer</title>
 
+  <!-- Leaflet Core -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- MarkerCluster -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <!-- Your Styles -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+<!-- ============================ -->
+<!-- TOP BAR CONTROLS -->
+<!-- ============================ -->
 <div id="top-bar">
   <input type="file" id="file-input" accept=".csv" />
 
@@ -30,12 +38,17 @@
   <select id="rep-select">
     <option value="">Assign to rep…</option>
   </select>
+
   <button id="assign-btn" disabled>Assign</button>
   <button id="export-btn" disabled>Export CSV</button>
 </div>
 
+<!-- ============================ -->
+<!-- MAIN LAYOUT -->
+<!-- ============================ -->
 <div id="main">
   <div id="map"></div>
+
   <div id="sidebar">
     <h3>Selection Summary</h3>
     <p><strong>Stops:</strong> <span id="selected-count">0</span></p>
@@ -64,9 +77,21 @@
   </div>
 </div>
 
+<!-- ============================ -->
+<!-- SCRIPTS -->
+<!-- ============================ -->
+
+<!-- Leaflet -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- MarkerCluster -->
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<!-- PapaParse -->
 <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+<!-- Your App -->
 <script src="app.js"></script>
+
 </body>
 </html>
