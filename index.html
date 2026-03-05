@@ -2,72 +2,71 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Route & Rep Tool</title>
+  <title>Route & Rep Optimizer</title>
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="top-bar">
-    <input type="file" id="file-input" accept=".csv" />
 
-    <label>
-      Color by:
-      <select id="color-mode">
-        <option value="rep">Rep</option>
-        <option value="segment">Segment</option>
-        <option value="premise">Premise</option>
-      </select>
-    </label>
+<div id="top-bar">
+  <input type="file" id="file-input" accept=".csv" />
 
-    <label>
-      Rep filter:
-      <select id="rep-filter">
-        <option value="">All reps</option>
-      </select>
-    </label>
+  <select id="color-mode">
+    <option value="rep">Color by Rep</option>
+    <option value="segment">Color by Segment</option>
+    <option value="premise">Color by Premise</option>
+  </select>
 
-    <input type="text" id="search-input" placeholder="Search Customer ID / Company" />
-    <button id="search-btn">Search</button>
+  <select id="rep-filter">
+    <option value="">All Reps</option>
+  </select>
 
-    <select id="rep-select">
-      <option value="">Assign to rep…</option>
-    </select>
-    <button id="assign-btn" disabled>Assign</button>
-    <button id="export-btn" disabled>Export CSV</button>
-  </div>
+  <input type="text" id="search-input" placeholder="Search Customer ID / Company" />
+  <button id="search-btn">Search</button>
 
-  <div id="main">
-    <div id="map"></div>
-    <div id="sidebar">
-      <h2>Selection summary</h2>
-      <p><strong>Selected stops:</strong> <span id="selected-count">0</span></p>
-      <p><strong>Selected revenue (Sept–Feb):</strong> $<span id="selected-revenue">0.00</span></p>
+  <select id="rep-select">
+    <option value="">Assign to rep…</option>
+  </select>
+  <button id="assign-btn" disabled>Assign</button>
+  <button id="export-btn" disabled>Export CSV</button>
+</div>
 
-      <h3>Route overview (by rep)</h3>
-      <table id="route-table">
-        <thead>
-          <tr>
-            <th>Rep</th>
-            <th># Stops</th>
-            <th>Total Rev</th>
-            <th>Avg/Stop</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+<div id="main">
+  <div id="map"></div>
+  <div id="sidebar">
+    <h3>Selection Summary</h3>
+    <p><strong>Stops:</strong> <span id="selected-count">0</span></p>
+    <p><strong>Revenue:</strong> $<span id="selected-revenue">0.00</span></p>
 
-      <h3>Selected accounts</h3>
-      <ul id="selected-list"></ul>
+    <h3>Route Overview</h3>
+    <table id="route-table">
+      <thead>
+        <tr>
+          <th>Rep</th>
+          <th># Stops</th>
+          <th>Total Rev</th>
+          <th>Avg/Stop</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
 
-      <h3>Account details</h3>
-      <div id="detail-panel">
-        <p>No account selected.</p>
-      </div>
+    <h3>Selected Accounts</h3>
+    <ul id="selected-list"></ul>
+
+    <h3>Account Details</h3>
+    <div id="detail-panel">
+      <p>No account selected.</p>
     </div>
   </div>
+</div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="app.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
