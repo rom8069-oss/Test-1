@@ -1,3 +1,5 @@
+window.addEventListener("DOMContentLoaded", () => {
+
 let map;
 let drawnItems;
 let markers = [];
@@ -241,3 +243,4 @@ function handleSelection(layer) {
         selectedIds.add(marker.accountId);
       }
     }
+}
