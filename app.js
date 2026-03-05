@@ -102,8 +102,11 @@ function normalizeRow(row, idx) {
     newRep: getField(row, ["New Rep"]),
     segment: getField(row, ["Segment"]),
     premise: getField(row, ["Premise"]),
-    revenue: getNumber(row, ["$ Vol Sept - Feb", "$ Vol Sept – Feb"])
+    revenue: getNumber(row, ["$ Vol Sept - Feb", "$ Vol Sept – Feb"]),
+    lat,
+    lng
   };
+}
 
 // ============================
 // REP LISTS
@@ -182,7 +185,17 @@ function updateMarkerStyle(acc) {
   if (!marker) return;
 
   const rep = acc.newRep || acc.currentRep || "";
-  const color = getColor(rep, "rep");
+  const seg = acc.segment || "";
+  const prem = acc.premise || "";
+
+  let color;
+  if (state.colorMode === "rep") {
+    color = getColor(rep, "rep");
+  } else if (state.colorMode === "segment") {
+    color = getColor(seg, "segment");
+  } else {
+    color = getColor(prem, "premise");
+  }
 
   marker.setStyle({
     color: state.selectedIds.has(acc.id) ? "black" : color,
@@ -299,7 +312,7 @@ function showDetails(acc) {
     <p><strong>Premise:</strong> ${acc.premise || ""}</p>
     <p><strong>Revenue (Sept–Feb):</strong> $${(acc.revenue || 0).toLocaleString()}</p>
   `;
-}}
+}
 
 // ============================
 // ROUTE SUMMARY
@@ -386,7 +399,6 @@ function searchAccounts() {
     return;
   }
 
-  // Select the account
   state.selectedIds.clear();
   state.selectedIds.add(match.id);
 
@@ -394,10 +406,8 @@ function searchAccounts() {
   updateSelectionSummary();
   showDetails(match);
 
-  // Zoom directly to the marker
   state.map.setView([match.lat, match.lng], 15);
 
-  // Add a temporary highlight ring
   const ring = L.circle([match.lat, match.lng], {
     radius: 120,
     color: "yellow",
