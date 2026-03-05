@@ -94,15 +94,16 @@ function normalizeRow(row, idx) {
   return {
     id: String(getField(row, ["Customer ID - DO NOT Remove"])) || String(idx),
     company: getField(row, ["Company"]),
+    address: getField(row, ["Address"]),
+    city: getField(row, ["City"]),
+    zip: getField(row, ["Zip Code"]),
+    county: getField(row, ["County"]),
     currentRep: getField(row, ["Current Rep"]),
     newRep: getField(row, ["New Rep"]),
     segment: getField(row, ["Segment"]),
     premise: getField(row, ["Premise"]),
-    revenue: getNumber(row, ["$ Vol Sept - Feb", "$ Vol Sept – Feb"]),
-    lat,
-    lng
+    revenue: getNumber(row, ["$ Vol Sept - Feb", "$ Vol Sept – Feb"])
   };
-}
 
 // ============================
 // REP LISTS
@@ -181,21 +182,12 @@ function updateMarkerStyle(acc) {
   if (!marker) return;
 
   const rep = acc.newRep || acc.currentRep || "";
-  const seg = acc.segment || "";
-  const prem = acc.premise || "";
-
-  let color;
-  if (state.colorMode === "rep") {
-    color = getColor(rep, "rep");
-  } else if (state.colorMode === "segment") {
-    color = getColor(seg, "segment");
-  } else {
-    color = getColor(prem, "premise");
-  }
+  const color = getColor(rep, "rep");
 
   marker.setStyle({
     color: state.selectedIds.has(acc.id) ? "black" : color,
-    fillColor: color
+    fillColor: color,
+    fillOpacity: 0.9
   });
 }
 
@@ -299,14 +291,15 @@ function showDetails(acc) {
   panel.innerHTML = `
     <p><strong>Company:</strong> ${acc.company || ""}</p>
     <p><strong>Customer ID:</strong> ${acc.id}</p>
+    <p><strong>Address:</strong> ${acc.address || ""}, ${acc.city || ""} ${acc.zip || ""}</p>
+    <p><strong>County:</strong> ${acc.county || ""}</p>
     <p><strong>Current Rep:</strong> ${acc.currentRep || ""}</p>
     <p><strong>New Rep:</strong> ${acc.newRep || "Unassigned"}</p>
     <p><strong>Segment:</strong> ${acc.segment || ""}</p>
     <p><strong>Premise:</strong> ${acc.premise || ""}</p>
     <p><strong>Revenue (Sept–Feb):</strong> $${(acc.revenue || 0).toLocaleString()}</p>
-    <p><strong>Lat / Lng:</strong> ${acc.lat}, ${acc.lng}</p>
   `;
-}
+}}
 
 // ============================
 // ROUTE SUMMARY
@@ -380,8 +373,7 @@ function exportCsv() {
 // ============================
 
 function searchAccounts() {
-  const input = document.getElementById("search-input");
-  const q = input.value.trim().toLowerCase();
+  const q = document.getElementById("search-input").value.trim().toLowerCase();
   if (!q) return;
 
   const match = state.accounts.find(a =>
@@ -394,12 +386,26 @@ function searchAccounts() {
     return;
   }
 
-  state.map.setView([match.lat, match.lng], 14);
+  // Select the account
   state.selectedIds.clear();
   state.selectedIds.add(match.id);
+
   updateAllMarkerStyles();
   updateSelectionSummary();
   showDetails(match);
+
+  // Zoom directly to the marker
+  state.map.setView([match.lat, match.lng], 15);
+
+  // Add a temporary highlight ring
+  const ring = L.circle([match.lat, match.lng], {
+    radius: 120,
+    color: "yellow",
+    weight: 3,
+    fillOpacity: 0
+  }).addTo(state.map);
+
+  setTimeout(() => state.map.removeLayer(ring), 2000);
 }
 
 // ============================
