@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Territory & Routing Tool</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="top-bar">
+    <input type="file" id="file-input" accept=".csv" />
+
+    <label>
+      Color by:
+      <select id="color-mode">
+        <option value="rep">Rep</option>
+        <option value="segment">Segment</option>
+        <option value="premise">Premise</option>
+      </select>
+    </label>
+
+    <label>
+      Rep filter:
+      <select id="rep-filter">
+        <option value="">All reps</option>
+      </select>
+    </label>
+
+    <label>
+      Revenue guardrail:
+      <input type="number" id="rev-threshold" value="250000" style="width:90px;" />
+    </label>
+
+    <input type="text" id="search-input" placeholder="Search Customer ID / Company / Address" />
+    <button id="search-btn">Search</button>
+
+    <select id="rep-select">
+      <option value="">Assign to rep…</option>
+    </select>
+    <button id="assign-btn" disabled>Assign</button>
+    <button id="undo-btn" disabled>Undo last</button>
+    <button id="export-btn" disabled>Export CSV</button>
+  </div>
+
+  <div id="main">
+    <div id="map"></div>
+    <div id="sidebar">
+      <h2>Selection summary</h2>
+      <p><strong>Selected stops:</strong> <span id="selected-count">0</span></p>
+      <p><strong>Selected revenue (Sept–Feb):</strong> $<span id="selected-revenue">0.00</span></p>
+
+      <h3>Route overview (by rep)</h3>
+      <table id="route-table">
+        <thead>
+          <tr>
+            <th>Rep</th>
+            <th># Stops</th>
+            <th>Total Rev</th>
+            <th>Avg/Stop</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <h3>Selected accounts</h3>
+      <ul id="selected-list"></ul>
+
+      <h3>Account details</h3>
+      <div id="detail-panel">
+        <p>No account selected.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
