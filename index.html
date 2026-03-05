@@ -2,13 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Territory & Routing Tool</title>
+  <title>Route & Rep Tool</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <script src="app.js></script>
   <div id="top-bar">
     <input type="file" id="file-input" accept=".csv" />
 
@@ -28,19 +26,13 @@
       </select>
     </label>
 
-    <label>
-      Revenue guardrail:
-      <input type="number" id="rev-threshold" value="250000" style="width:90px;" />
-    </label>
-
-    <input type="text" id="search-input" placeholder="Search Customer ID / Company / Address" />
+    <input type="text" id="search-input" placeholder="Search Customer ID / Company" />
     <button id="search-btn">Search</button>
 
     <select id="rep-select">
       <option value="">Assign to rep…</option>
     </select>
     <button id="assign-btn" disabled>Assign</button>
-    <button id="undo-btn" disabled>Undo last</button>
     <button id="export-btn" disabled>Export CSV</button>
   </div>
 
@@ -75,7 +67,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="app.js"></script>
 </body>
