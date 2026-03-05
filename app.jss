@@ -1,121 +1,95 @@
-window.addEventListener("DOMContentLoaded", () => {
-
-console.log("APP.JS LOADED");
-console.log("FILE INPUT ELEMENT:", fileInput);
 
 let map;
-let drawnItems;
 let markers = [];
 let accounts = [];
 let selectedIds = new Set();
-let lastAssignment = null;
-
-const LEGACY_IDS = []; // e.g. ["12345","67890"]
 
 const fileInput = document.getElementById('file-input');
 const colorModeSelect = document.getElementById('color-mode');
 const repFilterSelect = document.getElementById('rep-filter');
 const repSelect = document.getElementById('rep-select');
 const assignBtn = document.getElementById('assign-btn');
-const undoBtn = document.getElementById('undo-btn');
 const exportBtn = document.getElementById('export-btn');
 const selectedCountEl = document.getElementById('selected-count');
 const selectedRevenueEl = document.getElementById('selected-revenue');
 const selectedListEl = document.getElementById('selected-list');
 const routeTableBody = document.querySelector('#route-table tbody');
 const detailPanel = document.getElementById('detail-panel');
-const revThresholdInput = document.getElementById('rev-threshold');
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
 
 function initMap() {
   map = L.map('map').setView([41.88, -87.63], 8);
-
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19
   }).addTo(map);
+}
 
-  drawnItems = new L.FeatureGroup();
-  map.addLayer(drawnItems);
-
-  const drawControl = new L.Control.Draw({
-    draw: {
-      polygon: true,
-      rectangle: true,
-      circle: false,
-      marker: false,
-      polyline: false,
-      circlemarker: false
-    },
-    edit: {
-      featureGroup: drawnItems,
-      edit: false,
-      remove: true
+function safeField(row, keys) {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== "") {
+      return row[k];
     }
-  });
+  }
+  return "";
+}
 
-  map.addControl(drawControl);
-
-  map.on(L.Draw.Event.CREATED, e => {
-    drawnItems.clearLayers();
-    drawnItems.addLayer(e.layer);
-    handleSelection(e.layer);
-  });
-
-  map.on(L.Draw.Event.DELETED, () => {
-    selectedIds.clear();
-    updateSelectionSummary();
-    clearDetailPanel();
-  });
+function safeNumber(row, keys) {
+  const raw = safeField(row, keys);
+  if (raw === "") return 0;
+  const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ""));
+  return isNaN(num) ? 0 : num;
 }
 
 function loadCsv(file) {
-  console.log("loadCsv CALLED");
+  console.log("loadCsv called with:", file.name);
+
   Papa.parse(file, {
     header: true,
-    dynamicTyping: true,
     skipEmptyLines: true,
     complete: results => {
-
       console.log("RAW PARSED RESULTS:", results.data);
 
-      accounts = results.data
-        .map((row, idx) => {
-          const latRaw = row["Latitude"];
-          const lngRaw = row["Longitude"];
+      accounts = results.data.map((row, idx) => {
+        const lat = safeNumber(row, ["Latitude"]);
+        const lng = safeNumber(row, ["Longitude"]);
+        if (!lat || !lng) return null;
 
-          const lat = parseFloat(String(latRaw).replace(/[^0-9.-]/g, ""));
-          const lng = parseFloat(String(lngRaw).replace(/[^0-9.-]/g, ""));
+        return {
+          customerId: String(safeField(row, ["Customer ID - DO NOT Remove"])) || String(idx),
+          stopId: String(safeField(row, ["Stop ID - DO NOT REMOVE"])),
+          currentDM: safeField(row, ["Current DM"]),
+          currentRep: safeField(row, ["Current Rep"]),
+          newRep: safeField(row, ["New Rep"]),
+          premise: safeField(row, ["Premise"]),
+          segment: safeField(row, ["Segment"]),
+          chain: safeField(row, ["Chain"]),
+          company: safeField(row, ["Company"]),
+          address: safeField(row, ["Address"]),
+          city: safeField(row, ["City"]),
+          zip: safeField(row, ["Zip Code"]),
+          county: safeField(row, ["County"]),
+          lat,
+          lng,
+          revenue: safeNumber(row, ["$ Vol Sept - Feb", "$ Vol Sept – Feb"])
+        };
+      }).filter(a => a && a.lat && a.lng);
 
-          if (!lat || !lng) return null;
+      console.log("ACCOUNTS CREATED:", accounts.length);
 
-          return {
-            customerId: String(row["Customer ID - DO NOT Remove"] ?? idx),
-            stopId: String(row["Stop ID - DO NOT REMOVE"] ?? ""),
-            currentDM: row["Current DM"] ?? "",
-            currentRep: row["Current Rep"] ?? "",
-            newRep: row["New Rep"] ?? "",
-            premise: row["Premise"] ?? "",
-            segment: row["Segment"] ?? "",
-            chain: row["Chain"] ?? "",
-            company: row["Company"] ?? "",
-            address: row["Address"] ?? "",
-            city: row["City"] ?? "",
-            zip: row["Zip Code"] ?? "",
-            county: row["County"] ?? "",
-            lat,
-            lng,
-            revenue: parseFloat(row["$ Vol Sept - Feb"]) || 0
-          };
-        })
-        .filter(Boolean);
-
-      console.log("ACCOUNTS CREATED:", accounts);
+      if (!accounts.length) {
+        alert("No valid rows found. Check Latitude/Longitude and headers.");
+        return;
+      }
 
       buildRepLists();
       plotAccounts();
       updateRouteSummary();
       exportBtn.disabled = false;
+    },
+    error: err => {
+      console.error("Papa.parse error:", err);
+      alert("Error reading CSV file.");
     }
   });
 }
@@ -126,37 +100,34 @@ function buildRepLists() {
     if (a.currentRep && a.currentRep.trim()) reps.add(a.currentRep.trim());
     if (a.newRep && a.newRep.trim()) reps.add(a.newRep.trim());
   });
-
   reps.add("Rep 15");
   reps.add("Rep 16");
 
-  const sortedReps = Array.from(reps).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const sorted = Array.from(reps).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   repSelect.innerHTML = '<option value="">Assign to rep…</option>';
   repFilterSelect.innerHTML = '<option value="">All reps</option>';
 
-  sortedReps.forEach(rep => {
-    const opt1 = document.createElement('option');
-    opt1.value = rep;
-    opt1.textContent = rep;
-    repSelect.appendChild(opt1);
+  sorted.forEach(rep => {
+    const o1 = document.createElement('option');
+    o1.value = rep;
+    o1.textContent = rep;
+    repSelect.appendChild(o1);
 
-    const opt2 = document.createElement('option');
-    opt2.value = rep;
-    opt2.textContent = rep;
-    repFilterSelect.appendChild(opt2);
+    const o2 = document.createElement('option');
+    o2.value = rep;
+    o2.textContent = rep;
+    repFilterSelect.appendChild(o2);
   });
 }
 
 function getDisplayRep(a) {
-  return a.newRep && a.newRep.trim() ? a.newRep.trim() : (a.currentRep || "").trim();
+  return (a.newRep && a.newRep.trim()) || (a.currentRep && a.currentRep.trim()) || "";
 }
 
 function plotAccounts() {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
-
-  if (!accounts.length) return;
 
   const bounds = [];
   const colorPalette = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'teal', 'magenta', 'gold', 'navy'];
@@ -164,7 +135,7 @@ function plotAccounts() {
   const segmentColors = {};
   const premiseColors = {};
 
-  function getColorForRep(rep) {
+  function colorForRep(rep) {
     if (!rep) return 'gray';
     if (!repColors[rep]) {
       const idx = Object.keys(repColors).length % colorPalette.length;
@@ -173,7 +144,7 @@ function plotAccounts() {
     return repColors[rep];
   }
 
-  function getColorForSegment(seg) {
+  function colorForSegment(seg) {
     if (!seg) return 'gray';
     if (!segmentColors[seg]) {
       const idx = Object.keys(segmentColors).length % colorPalette.length;
@@ -182,7 +153,7 @@ function plotAccounts() {
     return segmentColors[seg];
   }
 
-  function getColorForPremise(p) {
+  function colorForPremise(p) {
     if (!p) return 'gray';
     if (!premiseColors[p]) {
       const idx = Object.keys(premiseColors).length % colorPalette.length;
@@ -191,7 +162,7 @@ function plotAccounts() {
     return premiseColors[p];
   }
 
-  const colorMode = colorModeSelect.value;
+  const mode = colorModeSelect.value;
   const repFilter = repFilterSelect.value;
 
   accounts.forEach(acc => {
@@ -199,9 +170,9 @@ function plotAccounts() {
     if (repFilter && rep !== repFilter) return;
 
     let color;
-    if (colorMode === 'rep') color = getColorForRep(rep);
-    else if (colorMode === 'segment') color = getColorForSegment(acc.segment);
-    else color = getColorForPremise(acc.premise);
+    if (mode === "rep") color = colorForRep(rep);
+    else if (mode === "segment") color = colorForSegment(acc.segment);
+    else color = colorForPremise(acc.premise);
 
     const marker = L.circleMarker([acc.lat, acc.lng], {
       radius: 5,
@@ -211,12 +182,6 @@ function plotAccounts() {
     });
 
     marker.accountId = acc.customerId;
-
-    marker.bindTooltip(
-      `${acc.company || acc.customerId}<br>` +
-      `Rev (Sept–Feb): $${acc.revenue.toLocaleString()}<br>` +
-      `Rep: ${rep || 'Unassigned'}`
-    );
 
     marker.on('click', () => {
       selectedIds.clear();
@@ -235,16 +200,172 @@ function plotAccounts() {
   }
 }
 
-function handleSelection(layer) {
-  selectedIds.clear();
+function updateSelectionSummary() {
+  const selected = accounts.filter(a => selectedIds.has(a.customerId));
+  const count = selected.length;
+  const revenue = selected.reduce((sum, a) => sum + (a.revenue || 0), 0);
 
-  markers.forEach(marker => {
-    const latlng = marker.getLatLng();
-    if (layer.getBounds && layer.getBounds().contains(latlng)) {
-      selectedIds.add(marker.accountId);
-    } else if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-      if (pointInPolygon(latlng, layer)) {
-        selectedIds.add(marker.accountId);
-      }
-    }
+  selectedCountEl.textContent = count;
+  selectedRevenueEl.textContent = revenue.toFixed(2);
+
+  selectedListEl.innerHTML = "";
+  selected.forEach(a => {
+    const li = document.createElement('li');
+    li.textContent = `${a.company || a.customerId} | $${a.revenue.toLocaleString()} | Rep: ${getDisplayRep(a) || "Unassigned"}`;
+    selectedListEl.appendChild(li);
+  });
+
+  assignBtn.disabled = !(count > 0 && repSelect.value);
 }
+
+function showAccountDetails(acc) {
+  detailPanel.innerHTML = `
+    <p><strong>$ Vol Sept–Feb:</strong> $${acc.revenue.toLocaleString()}</p>
+    <p><strong>Company:</strong> ${acc.company}</p>
+    <p><strong>Customer ID:</strong> ${acc.customerId}</p>
+    <p><strong>Stop ID:</strong> ${acc.stopId}</p>
+    <p><strong>Address:</strong> ${acc.address}, ${acc.city}, ${acc.zip}</p>
+    <p><strong>County:</strong> ${acc.county}</p>
+    <p><strong>Segment:</strong> ${acc.segment}</p>
+    <p><strong>Premise:</strong> ${acc.premise}</p>
+    <p><strong>Chain:</strong> ${acc.chain}</p>
+    <p><strong>Current DM:</strong> ${acc.currentDM}</p>
+    <p><strong>Current Rep:</strong> ${acc.currentRep}</p>
+    <p><strong>New Rep:</strong> ${acc.newRep || "Unassigned"}</p>
+    <p><strong>Lat / Lng:</strong> ${acc.lat}, ${acc.lng}</p>
+  `;
+}
+
+function updateRouteSummary() {
+  const byRep = {};
+  accounts.forEach(a => {
+    const rep = getDisplayRep(a) || "Unassigned";
+    if (!byRep[rep]) byRep[rep] = { stops: 0, revenue: 0 };
+    byRep[rep].stops += 1;
+    byRep[rep].revenue += a.revenue || 0;
+  });
+
+  routeTableBody.innerHTML = "";
+  Object.entries(byRep)
+    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
+    .forEach(([rep, stats]) => {
+      const tr = document.createElement('tr');
+      const avg = stats.stops ? stats.revenue / stats.stops : 0;
+      tr.innerHTML = `
+        <td>${rep}</td>
+        <td>${stats.stops}</td>
+        <td>$${stats.revenue.toFixed(2)}</td>
+        <td>$${avg.toFixed(2)}</td>
+      `;
+      routeTableBody.appendChild(tr);
+    });
+}
+
+function assignSelectedToRep() {
+  const rep = repSelect.value;
+  if (!rep || !selectedIds.size) return;
+
+  accounts.forEach(a => {
+    if (selectedIds.has(a.customerId)) {
+      a.newRep = rep;
+    }
+  });
+
+  plotAccounts();
+  updateSelectionSummary();
+  updateRouteSummary();
+}
+
+function exportCsv() {
+  if (!accounts.length) return;
+
+  const data = accounts.map(a => ({
+    "Customer ID - DO NOT Remove": a.customerId,
+    "Stop ID - DO NOT REMOVE": a.stopId,
+    "Current DM": a.currentDM,
+    "Current Rep": a.currentRep,
+    "New Rep": a.newRep,
+    "Premise": a.premise,
+    "Segment": a.segment,
+    "Chain": a.chain,
+    "Company": a.company,
+    "Address": a.address,
+    "City": a.city,
+    "Zip Code": a.zip,
+    "County": a.county,
+    "Latitude": a.lat,
+    "Longitude": a.lng,
+    "$ Vol Sept - Feb": a.revenue
+  }));
+
+  const csv = Papa.unparse(data);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'routes_with_new_rep.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function searchAccounts() {
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) return;
+
+  const match = accounts.find(a =>
+    a.customerId.toLowerCase().includes(q) ||
+    (a.company && a.company.toLowerCase().includes(q))
+  );
+
+  if (!match) {
+    alert("No matching account found.");
+    return;
+  }
+
+  map.setView([match.lat, match.lng], 14);
+  selectedIds.clear();
+  selectedIds.add(match.customerId);
+  updateSelectionSummary();
+  showAccountDetails(match);
+}
+
+// Events
+fileInput.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (file) loadCsv(file);
+});
+
+colorModeSelect.addEventListener('change', () => {
+  plotAccounts();
+});
+
+repFilterSelect.addEventListener('change', () => {
+  plotAccounts();
+});
+
+repSelect.addEventListener('change', () => {
+  updateSelectionSummary();
+});
+
+assignBtn.addEventListener('click', () => {
+  assignSelectedToRep();
+});
+
+exportBtn.addEventListener('click', () => {
+  exportCsv();
+});
+
+searchBtn.addEventListener('click', () => {
+  searchAccounts();
+});
+
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchAccounts();
+});
+
+// Init
+window.addEventListener('DOMContentLoaded', () => {
+  initMap();
+});
