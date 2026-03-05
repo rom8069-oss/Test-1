@@ -1,6 +1,6 @@
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 14px;
 }
 
@@ -8,16 +8,9 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
-  padding: 8px 12px;
+  padding: 8px;
   border-bottom: 1px solid #ddd;
   background: #f7f7f7;
-}
-
-#top-bar label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 #main {
@@ -31,53 +24,29 @@ body {
 
 #sidebar {
   flex: 1;
-  border-left: 1px solid #ddd;
-  padding: 8px 12px;
+  padding: 10px;
   overflow-y: auto;
+  border-left: 1px solid #ddd;
 }
 
-#route-table {
+table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
-#route-table th,
-#route-table td {
+th, td {
   border: 1px solid #ccc;
-  padding: 4px 6px;
+  padding: 4px;
   text-align: right;
 }
 
-#route-table th:first-child,
-#route-table td:first-child {
+th:first-child,
+td:first-child {
   text-align: left;
 }
 
-#selected-list {
-  list-style: none;
-  padding-left: 0;
-  max-height: 150px;
-  overflow-y: auto;
-  border: 1px solid #eee;
-}
-
-#selected-list li {
-  border-bottom: 1px solid #eee;
-  padding: 2px 4px;
-}
-
-#detail-panel {
-  border: 1px solid #eee;
-  padding: 6px;
-  background: #fafafa;
-}
-
-#detail-panel p {
-  margin: 2px 0;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.selected-marker {
+  stroke: black;
+  stroke-width: 3;
 }
