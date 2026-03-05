@@ -42,11 +42,55 @@ function loadCsv(file) {
     header: true,
     skipEmptyLines: true,
     complete: results => {
+      console.log("HEADERS:", results.meta.fields);
+      console.log("FIRST ROW:", results.data[0]);
+
       state.accounts = results.data
-        .map(normalizeRow)
+        .map((row, idx) => normalizeRow(row, idx))
         .filter(Boolean);
 
-      buildRepLists();
+      console.log("ACCOUNTS LOADED:", state.accounts.length);
+
+      if (!state.accounts.length) {
+        alert("No valid accounts loaded. Check Latitude/Longitude headers.");
+        return;
+      }
+
+      function buildRepLists() {
+        const repSelect = document.getElementById("rep-select");
+        const repFilter = document.getElementById("rep-filter");
+
+        const reps = new Set();
+
+  state.accounts.forEach(a => {
+    if (a.currentRep) reps.add(a.currentRep.trim());
+    if (a.newRep) reps.add(a.newRep.trim());
+  });
+
+  reps.add("Rep 15");
+  reps.add("Rep 16");
+
+  const sorted = Array.from(reps).sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true })
+  );
+
+  repSelect.innerHTML = '<option value="">Assign to rep…</option>';
+  repFilter.innerHTML = '<option value="">All Reps</option>';
+
+  sorted.forEach(rep => {
+    const o1 = document.createElement("option");
+    o1.value = rep;
+    o1.textContent = rep;
+    repSelect.appendChild(o1);
+
+    const o2 = document.createElement("option");
+    o2.value = rep;
+    o2.textContent = rep;
+    repFilter.appendChild(o2);
+  });
+
+  document.getElementById("assign-btn").disabled = false;
+}
       plotAccounts();
       updateRouteSummary();
       document.getElementById("export-btn").disabled = false;
@@ -54,21 +98,35 @@ function loadCsv(file) {
   });
 }
 
+function getField(row, possibleKeys) {
+  for (const key of possibleKeys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") {
+      return row[key];
+    }
+  }
+  return "";
+}
+
+function getNumber(row, possibleKeys) {
+  const raw = getField(row, possibleKeys);
+  const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ""));
+  return isNaN(num) ? 0 : num;
+}
+
 function normalizeRow(row, idx) {
-  const lat = parseFloat(row["Latitude"]);
-  const lng = parseFloat(row["Longitude"]);
+  const lat = getNumber(row, ["Latitude", "Lat"]);
+  const lng = getNumber(row, ["Longitude", "Lng", "Long"]);
+
   if (!lat || !lng) return null;
 
   return {
-    id: row["Customer ID - DO NOT Remove"] || String(idx),
-    company: row["Company"] || "",
-    currentRep: row["Current Rep"] || "",
-    newRep: row["New Rep"] || "",
-    segment: row["Segment"] || "",
-    premise: row["Premise"] || "",
-    revenue: parseFloat(
-      String(row["$ Vol Sept - Feb"] || "0").replace(/[^0-9.-]/g, "")
-    ) || 0,
+    id: String(getField(row, ["Customer ID - DO NOT Remove"])) || String(idx),
+    company: getField(row, ["Company"]),
+    currentRep: getField(row, ["Current Rep"]),
+    newRep: getField(row, ["New Rep"]),
+    segment: getField(row, ["Segment"]),
+    premise: getField(row, ["Premise"]),
+    revenue: getNumber(row, ["$ Vol Sept - Feb", "$ Vol Sept – Feb"]),
     lat,
     lng
   };
