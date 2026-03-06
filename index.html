@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Route & Rep Optimizer</title>
 
-  <!-- Your CSS (correct filename!) -->
+  <!-- Your CSS -->
   <link rel="stylesheet" href="style.css">
 
   <!-- Leaflet -->
@@ -21,7 +21,6 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
-    /* Ensures the map actually renders */
     #map { height: 100%; }
   </style>
 </head>
@@ -46,6 +45,9 @@
       <input id="search-input" placeholder="Search by ID or Company">
       <button id="search-btn">Search</button>
     </div>
+
+    <button id="lasso-btn">Lasso Select</button>
+    <button id="clear-lasso-btn">Clear Lasso & Selection</button>
 
     <button id="export-btn" disabled>Export CSV</button>
   </div>
