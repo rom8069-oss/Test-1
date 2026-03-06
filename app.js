@@ -555,7 +555,10 @@ function updateRouteSummary() {
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><span class="rep-swatch" style="background:${color};"></span>${rep}</td>
+      <td>
+        <span class="rep-swatch" style="background:${color};"></span>
+        ${rep}
+      </td>
       <td>${stats.stops}</td>
       <td>$${stats.revenue.toLocaleString()}</td>
       <td>$${avg.toLocaleString()}</td>
