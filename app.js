@@ -12,7 +12,10 @@ const state = {
   segmentColors: {},
   premiseColors: {},
   colorMode: "rep",
-  hullLayers: []
+  hullLayers: [],
+  lasso: null,
+  lassoActive: false,
+  lassoLayers: []
 };
 
 const colorPalette = [
@@ -33,7 +36,7 @@ function initMap() {
   state.clusterGroup = createClusterGroup();
   state.map.addLayer(state.clusterGroup);
 
-  enableBoxSelect();
+  enableLasso();
 }
 
 // ============================
@@ -279,31 +282,85 @@ function updateAllMarkerStyles() {
 }
 
 // ============================
-// BOX SELECT
+// FREEHAND LASSO (LEAFLET-LASSO)
 // ============================
 
-function enableBoxSelect() {
-  let start;
+function enableLasso() {
+  if (!L.lasso) return;
 
-  state.map.on("mousedown", e => {
-    if (!e.originalEvent.shiftKey) return;
-    start = e.latlng;
+  state.lasso = L.lasso(state.map, {
+    intersect: true
   });
 
-  state.map.on("mouseup", e => {
-    if (!start) return;
+  const LassoControl = L.Control.extend({
+    onAdd: function () {
+      const container = L.DomUtil.create("div", "leaflet-bar");
+      const button = L.DomUtil.create("a", "lasso-button", container);
+      button.href = "#";
+      button.title = "Freehand Lasso Select";
+      button.innerHTML = "⭘";
 
-    const bounds = L.latLngBounds(start, e.latlng);
+      L.DomEvent.on(button, "click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
+
+        if (state.lassoActive) {
+          state.lasso.disable();
+          state.lassoActive = false;
+          button.classList.remove("active");
+        } else {
+          state.lasso.enable();
+          state.lassoActive = true;
+          button.classList.add("active");
+        }
+      });
+
+      return container;
+    }
+  });
+
+  state.map.addControl(new LassoControl({ position: "topleft" }));
+
+  state.map.on("lasso.finished", (event) => {
+    state.lasso.disable();
+    state.lassoActive = false;
+
+    const buttonEls = document.getElementsByClassName("lasso-button");
+    if (buttonEls.length) {
+      buttonEls[0].classList.remove("active");
+    }
+
+    const latLngs = event.latLngs || [];
+    if (!latLngs.length) return;
+
+    const coords = latLngs.map(ll => [ll.lng, ll.lat]);
+    if (coords.length < 3) return;
+
+    if (coords[0][0] !== coords[coords.length - 1][0] ||
+        coords[0][1] !== coords[coords.length - 1][1]) {
+      coords.push(coords[0]);
+    }
+
+    const polygon = turf.polygon([coords]);
+
+    state.selectedIds.clear();
 
     state.accounts.forEach(acc => {
-      if (bounds.contains([acc.lat, acc.lng])) {
+      const pt = turf.point([acc.lng, acc.lat]);
+      if (turf.booleanPointInPolygon(pt, polygon)) {
         state.selectedIds.add(acc.id);
       }
     });
 
     updateAllMarkerStyles();
     updateSelectionSummary();
-    start = null;
+
+    const leafletPoly = L.polygon(latLngs, {
+      color: "#000",
+      weight: 2,
+      fillOpacity: 0.05
+    }).addTo(state.map);
+    state.lassoLayers.push(leafletPoly);
   });
 }
 
@@ -401,7 +458,6 @@ function assignSelected() {
   updateAllMarkerStyles();
   updateSelectionSummary();
 
-  // NEW: refresh details panel
   if (state.selectedIds.size === 1) {
     const id = Array.from(state.selectedIds)[0];
     const acc = state.accounts.find(a => a.id === id);
