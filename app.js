@@ -19,8 +19,10 @@ const state = {
 };
 
 const colorPalette = [
-  "#e41a1c","#377eb8","#4daf4a","#984ea3",
-  "#ff7f00","#a65628","#f781bf","#999999"
+  "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00",
+  "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62",
+  "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494",
+  "#b3b3b3", "#1b9e77", "#d95f02", "#7570b3", "#e7298a"
 ];
 
 const MAX_ROUTE_HOP_MILES = 15; // Outlier threshold
@@ -357,7 +359,7 @@ function addResetLassoControl() {
 // ============================
 
 function drawRepRoutes() {
-  // Remove old polylines
+  // Remove old boundaries
   Object.values(state.polylineLayers).forEach(layer => state.map.removeLayer(layer));
   state.polylineLayers = {};
 
@@ -366,28 +368,28 @@ function drawRepRoutes() {
   state.accounts.forEach(acc => {
     const rep = acc.newRep || acc.currentRep || "Unassigned";
     if (!reps[rep]) reps[rep] = [];
-    reps[rep].push(acc);
+    reps[rep].push([acc.lng, acc.lat]);
   });
 
-  Object.entries(reps).forEach(([rep, accs]) => {
-    if (accs.length < 2) return;
+  Object.entries(reps).forEach(([rep, coords]) => {
+    if (coords.length < 3) return;
+
+    const points = turf.points(coords);
+    const hull = turf.convex(points);
+
+    if (!hull) return;
 
     const color = getColor(rep, "rep");
 
-    // Build nearest-neighbor route
-    const route = buildNearestNeighborRoute(accs);
-
-    if (!route.length) return;
-
-    const latlngs = route.map(a => [a.lat, a.lng]);
-
-    const polyline = L.polyline(latlngs, {
-      color,
-      weight: 3,
-      opacity: 0.9
+    const layer = L.geoJSON(hull, {
+      style: {
+        color,
+        weight: 2,
+        fillOpacity: 0.1
+      }
     }).addTo(state.map);
 
-    state.polylineLayers[rep] = polyline;
+    state.polylineLayers[rep] = layer;
   });
 }
 
