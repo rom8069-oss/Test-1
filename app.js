@@ -15,7 +15,7 @@ const state = {
   hullLayers: [],
   lasso: null,
   lassoActive: false,
-  lassoLayers: []
+  lassoLayer: null
 };
 
 const colorPalette = [
@@ -37,6 +37,7 @@ function initMap() {
   state.map.addLayer(state.clusterGroup);
 
   enableLasso();
+  addResetLassoControl();
 }
 
 // ============================
@@ -343,8 +344,7 @@ function enableLasso() {
 
     const polygon = turf.polygon([coords]);
 
-    state.selectedIds.clear();
-
+    // KEEP existing selection, add new accounts inside lasso
     state.accounts.forEach(acc => {
       const pt = turf.point([acc.lng, acc.lat]);
       if (turf.booleanPointInPolygon(pt, polygon)) {
@@ -355,13 +355,59 @@ function enableLasso() {
     updateAllMarkerStyles();
     updateSelectionSummary();
 
-    const leafletPoly = L.polygon(latLngs, {
+    // Replace previous lasso polygon with the new one
+    if (state.lassoLayer) {
+      state.map.removeLayer(state.lassoLayer);
+    }
+
+    state.lassoLayer = L.polygon(latLngs, {
       color: "#000",
       weight: 2,
       fillOpacity: 0.05
     }).addTo(state.map);
-    state.lassoLayers.push(leafletPoly);
   });
+}
+
+// ============================
+// RESET LASSO CONTROL
+// ============================
+
+function addResetLassoControl() {
+  const ResetControl = L.Control.extend({
+    onAdd: function () {
+      const container = L.DomUtil.create("div", "leaflet-bar");
+      const button = L.DomUtil.create("a", "reset-lasso-button", container);
+      button.href = "#";
+      button.title = "Clear Lasso & Selection";
+      button.innerHTML = "✖";
+
+      L.DomEvent.on(button, "click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
+
+        // Remove lasso polygon
+        if (state.lassoLayer) {
+          state.map.removeLayer(state.lassoLayer);
+          state.lassoLayer = null;
+        }
+
+        // Clear selected accounts
+        state.selectedIds.clear();
+
+        // Refresh UI
+        updateAllMarkerStyles();
+        updateSelectionSummary();
+
+        // Clear details panel
+        document.getElementById("detail-panel").innerHTML =
+          "<p>No account selected.</p>";
+      });
+
+      return container;
+    }
+  });
+
+  state.map.addControl(new ResetControl({ position: "topleft" }));
 }
 
 // ============================
