@@ -1,7 +1,6 @@
-// ============================
-// CENTRAL STATE
-// ============================
-
+/****************************************************
+ * GLOBAL STATE
+ ****************************************************/
 const state = {
   map: null,
   markerLayer: null,
@@ -14,8 +13,8 @@ const state = {
   colorMode: "rep",
   territoryLayers: {},
   lasso: null,
-  lassoActive: false,
-  lassoLayer: null
+  lassoLayer: null,
+  activeReps: new Set() // for multi-rep filtering
 };
 
 const colorPalette = [
@@ -25,7 +24,9 @@ const colorPalette = [
   "#b3b3b3", "#1b9e77", "#d95f02", "#7570b3", "#e7298a"
 ];
 
-// Illinois boundary (simplified)
+/****************************************************
+ * MEDIUM-PRECISION ILLINOIS BOUNDARY
+ ****************************************************/
 const ILLINOIS_BOUNDARY = {
   "type": "Feature",
   "properties": { "name": "Illinois" },
@@ -87,11 +88,9 @@ const ILLINOIS_BOUNDARY = {
   }
 };
 
-
-// ============================
-// INIT MAP
-// ============================
-
+/****************************************************
+ * MAP INITIALIZATION
+ ****************************************************/
 function initMap() {
   state.map = L.map("map").setView([40.0, -89.0], 7);
 
@@ -101,21 +100,15 @@ function initMap() {
   state.markerLayer = L.layerGroup().addTo(state.map);
 
   L.geoJSON(ILLINOIS_BOUNDARY, {
-    style: {
-      color: "#444",
-      weight: 1,
-      fillOpacity: 0
-    }
+    style: { color: "#444", weight: 1, fillOpacity: 0 }
   }).addTo(state.map);
 
   setupLasso();
 }
 
-
-// ============================
-// CSV LOADING
-// ============================
-
+/****************************************************
+ * CSV LOADING
+ ****************************************************/
 function loadCsv(file) {
   Papa.parse(file, {
     header: true,
@@ -126,11 +119,12 @@ function loadCsv(file) {
         .filter(Boolean);
 
       if (!state.accounts.length) {
-        alert("No valid accounts loaded. Check Latitude/Longitude headers.");
+        alert("No valid accounts loaded.");
         return;
       }
 
       buildRepLists();
+      buildRepFilterDropdown();
       plotAccounts();
       drawRepTerritories();
       updateRouteSummary();
@@ -180,53 +174,89 @@ function normalizeRow(row, idx) {
   };
 }
 
-
-// ============================
-// REP LISTS
-// ============================
-
+/****************************************************
+ * REP LISTS
+ ****************************************************/
 function buildRepLists() {
   const repSelect = document.getElementById("rep-select");
-  const repFilter = document.getElementById("rep-filter");
+  repSelect.innerHTML = '<option value="">Assign to rep…</option>';
 
   const reps = new Set();
-
   state.accounts.forEach(a => {
     if (a.currentRep) reps.add(a.currentRep.trim());
     if (a.newRep) reps.add(a.newRep.trim());
   });
 
-  reps.add("Rep 15");
-  reps.add("Rep 16");
+  const sorted = [...reps].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true })
+  );
+
+  sorted.forEach(rep => {
+    repSelect.insertAdjacentHTML("beforeend", `<option value="${rep}">${rep}</option>`);
+  });
+}
+
+/****************************************************
+ * MULTI-REP FILTER DROPDOWN
+ ****************************************************/
+function buildRepFilterDropdown() {
+  const container = document.getElementById("rep-filter-dropdown");
+  container.innerHTML = "";
+
+  const reps = new Set();
+  state.accounts.forEach(a => {
+    if (a.currentRep) reps.add(a.currentRep.trim());
+    if (a.newRep) reps.add(a.newRep.trim());
+  });
 
   const sorted = [...reps].sort((a, b) =>
     a.localeCompare(b, undefined, { numeric: true })
   );
 
-  repSelect.innerHTML = '<option value="">Assign to rep…</option>';
-  repFilter.innerHTML = '<option value="">All Reps</option>';
-
   sorted.forEach(rep => {
-    repSelect.insertAdjacentHTML("beforeend", `<option value="${rep}">${rep}</option>`);
-    repFilter.insertAdjacentHTML("beforeend", `<option value="${rep}">${rep}</option>`);
+    const div = document.createElement("div");
+    div.className = "rep-checkbox";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = rep;
+    checkbox.addEventListener("change", handleRepFilterChange);
+
+    const label = document.createElement("label");
+    label.textContent = rep;
+
+    div.appendChild(checkbox);
+    div.appendChild(label);
+    container.appendChild(div);
   });
 }
 
+function handleRepFilterChange() {
+  const checkboxes = document.querySelectorAll("#rep-filter-dropdown input[type='checkbox']");
+  state.activeReps.clear();
 
-// ============================
-// MARKERS
-// ============================
+  checkboxes.forEach(cb => {
+    if (cb.checked) state.activeReps.add(cb.value);
+  });
 
+  plotAccounts();
+  drawRepTerritories();
+  updateSelectionSummary();
+}
+
+/****************************************************
+ * MARKERS
+ ****************************************************/
 function plotAccounts() {
   state.markerLayer.clearLayers();
   state.markersById = {};
 
-  const repFilter = document.getElementById("rep-filter").value || "";
   const bounds = [];
 
   state.accounts.forEach(acc => {
-    const displayRep = acc.newRep || acc.currentRep || "";
-    if (repFilter && displayRep !== repFilter) return;
+    const rep = acc.newRep || acc.currentRep || "";
+
+    if (state.activeReps.size > 0 && !state.activeReps.has(rep)) return;
 
     const marker = L.circleMarker([acc.lat, acc.lng], {
       radius: 3,
@@ -284,13 +314,10 @@ function getColor(key, type) {
   return map[key];
 }
 
-
-// ============================
-// SELECTION
-// ============================
-
+/****************************************************
+ * SELECTION
+ ****************************************************/
 function handleMarkerClick(e, acc) {
-  // Simple click-to-select (Option A)
   if (!e.originalEvent.shiftKey) state.selectedIds.clear();
 
   if (state.selectedIds.has(acc.id)) state.selectedIds.delete(acc.id);
@@ -305,26 +332,28 @@ function updateAllMarkerStyles() {
   state.accounts.forEach(updateMarkerStyle);
 }
 
-
-// ============================
-// LASSO (TOP BAR BUTTONS)
-// ============================
-
+/****************************************************
+ * LASSO (ON THE MAP)
+ ****************************************************/
 function setupLasso() {
-  if (!L.lasso) return;
+  if (typeof L.lasso !== "function") {
+    console.error("Leaflet-Lasso failed to load");
+    return;
+  }
 
-  state.lasso = L.lasso(state.map, { intersect: true });
+  state.lasso = L.lasso(state.map, {
+    intersect: true,
+    polygon: true,
+    smoothFactor: 1.0
+  });
 
-  state.map.on("lasso.finished", (event) => {
+  state.map.on("lasso.finished", event => {
     state.lasso.disable();
-    state.lassoActive = false;
 
     const latLngs = event.latLngs || [];
     if (!latLngs.length) return;
 
     const coords = latLngs.map(ll => [ll.lng, ll.lat]);
-    if (coords.length < 3) return;
-
     if (coords[0][0] !== coords[coords.length - 1][0] ||
         coords[0][1] !== coords[coords.length - 1][1]) {
       coords.push(coords[0]);
@@ -333,6 +362,9 @@ function setupLasso() {
     const polygon = turf.polygon([coords]);
 
     state.accounts.forEach(acc => {
+      const rep = acc.newRep || acc.currentRep || "";
+      if (state.activeReps.size > 0 && !state.activeReps.has(rep)) return;
+
       const pt = turf.point([acc.lng, acc.lat]);
       if (turf.booleanPointInPolygon(pt, polygon)) {
         state.selectedIds.add(acc.id);
@@ -345,17 +377,47 @@ function setupLasso() {
     if (state.lassoLayer) state.map.removeLayer(state.lassoLayer);
 
     state.lassoLayer = L.polygon(latLngs, {
-      color: "#000000",
+      color: "#000",
       weight: 2,
       fillOpacity: 0.05
     }).addTo(state.map);
   });
-}
 
-function startLasso() {
-  if (!state.lasso) return;
-  state.lasso.enable();
-  state.lassoActive = true;
+  // Add lasso control button
+  L.Control.LassoControl = L.Control.extend({
+    onAdd: function () {
+      const btn = L.DomUtil.create("button", "leaflet-bar");
+      btn.innerHTML = "L";
+      btn.title = "Lasso Select";
+
+      btn.onclick = () => state.lasso.enable();
+      return btn;
+    }
+  });
+
+  L.control.lassoControl = function (opts) {
+    return new L.Control.LassoControl(opts);
+  };
+
+  L.control.lassoControl({ position: "topleft" }).addTo(state.map);
+
+  // Clear lasso button
+  L.Control.ClearLasso = L.Control.extend({
+    onAdd: function () {
+      const btn = L.DomUtil.create("button", "leaflet-bar");
+      btn.innerHTML = "X";
+      btn.title = "Clear Lasso";
+
+      btn.onclick = () => clearLassoAndSelection();
+      return btn;
+    }
+  });
+
+  L.control.clearLasso = function (opts) {
+    return new L.Control.ClearLasso(opts);
+  };
+
+  L.control.clearLasso({ position: "topleft" }).addTo(state.map);
 }
 
 function clearLassoAndSelection() {
@@ -370,30 +432,36 @@ function clearLassoAndSelection() {
     "<p>No account selected.</p>";
 }
 
-
-// ============================
-// JIGSAW TERRITORIES
-// ============================
-
+/****************************************************
+ * TERRITORIES (VORONOI)
+ ****************************************************/
 function drawRepTerritories() {
   Object.values(state.territoryLayers).flat().forEach(layer => state.map.removeLayer(layer));
   state.territoryLayers = {};
 
   if (!state.accounts.length) return;
 
-  const points = state.accounts.map(a => turf.point([a.lng, a.lat]));
-  const fc = turf.featureCollection(points);
+  const points = state.accounts
+    .filter(a => state.activeReps.size === 0 || state.activeReps.has(a.newRep || a.currentRep))
+    .map(a => turf.point([a.lng, a.lat]));
 
+  if (!points.length) return;
+
+  const fc = turf.featureCollection(points);
   const bbox = turf.bbox(ILLINOIS_BOUNDARY);
   const voronoi = turf.voronoi(fc, { bbox });
+
   if (!voronoi || !voronoi.features.length) return;
 
   const repCells = {};
+
   voronoi.features.forEach((cell, i) => {
     const acc = state.accounts[i];
-    if (!cell || !cell.geometry) return;
+    if (!acc || !cell || !cell.geometry) return;
 
     const rep = acc.newRep || acc.currentRep || "Unassigned";
+    if (state.activeReps.size > 0 && !state.activeReps.has(rep)) return;
+
     if (!repCells[rep]) repCells[rep] = [];
     repCells[rep].push(cell);
   });
@@ -405,9 +473,7 @@ function drawRepTerritories() {
     for (let i = 1; i < cells.length; i++) {
       try {
         merged = turf.union(merged, cells[i]) || merged;
-      } catch {
-        // skip bad union
-      }
+      } catch {}
     }
 
     const clipped = turf.intersect(merged, ILLINOIS_BOUNDARY);
@@ -428,11 +494,9 @@ function drawRepTerritories() {
   });
 }
 
-
-// ============================
-// SELECTION SUMMARY + DETAILS
-// ============================
-
+/****************************************************
+ * SELECTION SUMMARY + DETAILS
+ ****************************************************/
 function updateSelectionSummary() {
   const selected = state.accounts.filter(a => state.selectedIds.has(a.id));
   const count = selected.length;
@@ -471,16 +535,16 @@ function showDetails(acc) {
   `;
 }
 
-
-// ============================
-// ROUTE SUMMARY TABLE
-// ============================
-
+/****************************************************
+ * ROUTE SUMMARY TABLE
+ ****************************************************/
 function updateRouteSummary() {
   const byRep = {};
 
   state.accounts.forEach(a => {
     const rep = a.newRep || a.currentRep || "Unassigned";
+    if (state.activeReps.size > 0 && !state.activeReps.has(rep)) return;
+
     if (!byRep[rep]) byRep[rep] = { stops: 0, revenue: 0 };
     byRep[rep].stops++;
     byRep[rep].revenue += a.revenue;
@@ -507,11 +571,9 @@ function updateRouteSummary() {
   });
 }
 
-
-// ============================
-// ASSIGNMENT
-// ============================
-
+/****************************************************
+ * ASSIGNMENT
+ ****************************************************/
 function assignSelected() {
   const rep = document.getElementById("rep-select").value;
   if (!rep) return;
@@ -535,11 +597,9 @@ function assignSelected() {
   }
 }
 
-
-// ============================
-// EXPORT
-// ============================
-
+/****************************************************
+ * EXPORT
+ ****************************************************/
 function exportCsv() {
   const csv = Papa.unparse(state.accounts);
   const blob = new Blob([csv], { type: "text/csv" });
@@ -553,11 +613,9 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
-
-// ============================
-// SEARCH
-// ============================
-
+/****************************************************
+ * SEARCH
+ ****************************************************/
 function searchAccounts() {
   const q = document.getElementById("search-input").value.trim().toLowerCase();
   if (!q) return;
@@ -591,13 +649,34 @@ function searchAccounts() {
   setTimeout(() => state.map.removeLayer(ring), 2000);
 }
 
+/****************************************************
+ * MULTI-REP DROPDOWN TOGGLE / OUTSIDE CLICK
+ ****************************************************/
+function setupRepFilterDropdownBehavior() {
+  const btn = document.getElementById("rep-filter-btn");
+  const dropdown = document.getElementById("rep-filter-dropdown");
 
-// ============================
-// EVENTS
-// ============================
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle("dropdown-hidden");
+  });
 
+  document.addEventListener("click", (e) => {
+    if (!dropdown.classList.contains("dropdown-hidden")) {
+      const within = dropdown.contains(e.target) || btn.contains(e.target);
+      if (!within) dropdown.classList.add("dropdown-hidden");
+    }
+  });
+}
+
+/****************************************************
+ * EVENTS
+ ****************************************************/
 document.getElementById("file-input")
-  .addEventListener("change", e => loadCsv(e.target.files[0]));
+  .addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (file) loadCsv(file);
+  });
 
 document.getElementById("assign-btn")
   .addEventListener("click", assignSelected);
@@ -611,13 +690,6 @@ document.getElementById("color-mode")
     updateAllMarkerStyles();
   });
 
-document.getElementById("rep-filter")
-  .addEventListener("change", () => {
-    plotAccounts();
-    drawRepTerritories();
-    updateSelectionSummary();
-  });
-
 document.getElementById("rep-select")
   .addEventListener("change", updateSelectionSummary);
 
@@ -629,10 +701,7 @@ document.getElementById("search-input")
     if (e.key === "Enter") searchAccounts();
   });
 
-document.getElementById("lasso-btn")
-  .addEventListener("click", startLasso);
-
-document.getElementById("clear-lasso-btn")
-  .addEventListener("click", clearLassoAndSelection);
-
-window.addEventListener("DOMContentLoaded", initMap);
+window.addEventListener("DOMContentLoaded", () => {
+  initMap();
+  setupRepFilterDropdownBehavior();
+});
