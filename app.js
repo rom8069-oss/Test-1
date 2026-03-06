@@ -12,7 +12,7 @@ const state = {
   segmentColors: {},
   premiseColors: {},
   colorMode: "rep",
-  polylineLayers: {},
+  territoryLayers: {},
   lasso: null,
   lassoActive: false,
   lassoLayer: null
@@ -25,7 +25,67 @@ const colorPalette = [
   "#b3b3b3", "#1b9e77", "#d95f02", "#7570b3", "#e7298a"
 ];
 
-const MAX_ROUTE_HOP_MILES = 15; // Outlier threshold
+// Illinois boundary (simplified)
+const ILLINOIS_BOUNDARY = {
+  "type": "Feature",
+  "properties": { "name": "Illinois" },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [[
+      [-91.513079, 42.508481],
+      [-90.639984, 42.510065],
+      [-90.415429, 42.326062],
+      [-90.311367, 42.068233],
+      [-90.179098, 42.008334],
+      [-89.957351, 41.809722],
+      [-89.840449, 41.710409],
+      [-89.730667, 41.453987],
+      [-89.522222, 41.347222],
+      [-89.517222, 41.252222],
+      [-89.409722, 41.179722],
+      [-89.203889, 41.126111],
+      [-88.997222, 41.135833],
+      [-88.834722, 41.026944],
+      [-88.730556, 40.960556],
+      [-88.627222, 40.777222],
+      [-88.514722, 40.679722],
+      [-88.389722, 40.556944],
+      [-88.241389, 40.381389],
+      [-88.142222, 40.235556],
+      [-88.064722, 40.095556],
+      [-87.934722, 39.914722],
+      [-87.835556, 39.771389],
+      [-87.682222, 39.638889],
+      [-87.525556, 39.442222],
+      [-87.525556, 39.356944],
+      [-87.622222, 39.215556],
+      [-87.655556, 39.105556],
+      [-87.682222, 38.955556],
+      [-87.835556, 38.785556],
+      [-87.950556, 38.632222],
+      [-88.064722, 38.474722],
+      [-88.142222, 38.305556],
+      [-88.241389, 38.145556],
+      [-88.389722, 37.995556],
+      [-88.514722, 37.865556],
+      [-88.627222, 37.725556],
+      [-88.730556, 37.575556],
+      [-88.834722, 37.435556],
+      [-88.997222, 37.285556],
+      [-89.203889, 37.135556],
+      [-89.409722, 37.035556],
+      [-89.517222, 36.985556],
+      [-89.730667, 36.993987],
+      [-89.957351, 37.151722],
+      [-90.179098, 37.325334],
+      [-90.311367, 37.508233],
+      [-90.415429, 37.726062],
+      [-90.639984, 37.910065],
+      [-91.513079, 37.908481],
+      [-91.513079, 42.508481]
+    ]]
+  }
+};
 
 
 // ============================
@@ -33,12 +93,21 @@ const MAX_ROUTE_HOP_MILES = 15; // Outlier threshold
 // ============================
 
 function initMap() {
-  state.map = L.map('map').setView([41.88, -87.63], 8);
+  state.map = L.map("map").setView([40.0, -89.0], 7);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
     .addTo(state.map);
 
   state.markerLayer = L.layerGroup().addTo(state.map);
+
+  // Optional: draw Illinois outline for reference
+  L.geoJSON(ILLINOIS_BOUNDARY, {
+    style: {
+      color: "#444",
+      weight: 1,
+      fillOpacity: 0
+    }
+  }).addTo(state.map);
 
   enableLasso();
   addResetLassoControl();
@@ -65,7 +134,7 @@ function loadCsv(file) {
 
       buildRepLists();
       plotAccounts();
-      drawRepRoutes();
+      drawRepTerritories();
       updateRouteSummary();
       updateSelectionSummary();
 
@@ -132,7 +201,9 @@ function buildRepLists() {
   reps.add("Rep 15");
   reps.add("Rep 16");
 
-  const sorted = [...reps].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const sorted = [...reps].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true })
+  );
 
   repSelect.innerHTML = '<option value="">Assign to rep…</option>';
   repFilter.innerHTML = '<option value="">All Reps</option>';
@@ -160,8 +231,9 @@ function plotAccounts() {
     if (repFilter && displayRep !== repFilter) return;
 
     const marker = L.circleMarker([acc.lat, acc.lng], {
-      radius: 6,
-      fillOpacity: 0.9
+      radius: 3,
+      fillOpacity: 0.9,
+      className: "account-pin"
     });
 
     marker.accountId = acc.id;
@@ -175,7 +247,7 @@ function plotAccounts() {
   });
 
   if (bounds.length) {
-    state.map.fitBounds(bounds, { padding: [20,20] });
+    state.map.fitBounds(bounds, { padding: [20, 20] });
   }
 }
 
@@ -193,14 +265,14 @@ function updateMarkerStyle(acc) {
   else color = getColor(prem, "premise");
 
   marker.setStyle({
-    color: state.selectedIds.has(acc.id) ? "black" : color,
+    color: state.selectedIds.has(acc.id) ? "#000000" : color,
     fillColor: color,
     fillOpacity: 0.9
   });
 }
 
 function getColor(key, type) {
-  if (!key) return "#888";
+  if (!key) return "#888888";
 
   let map =
     type === "rep" ? state.repColors :
@@ -293,7 +365,7 @@ function enableLasso() {
 
     const polygon = turf.polygon([coords]);
 
-    // KEEP previous selection, add new
+    // Add to existing selection
     state.accounts.forEach(acc => {
       const pt = turf.point([acc.lng, acc.lat]);
       if (turf.booleanPointInPolygon(pt, polygon)) {
@@ -308,7 +380,7 @@ function enableLasso() {
     if (state.lassoLayer) state.map.removeLayer(state.lassoLayer);
 
     state.lassoLayer = L.polygon(latLngs, {
-      color: "#000",
+      color: "#000000",
       weight: 2,
       fillOpacity: 0.05
     }).addTo(state.map);
@@ -355,80 +427,65 @@ function addResetLassoControl() {
 
 
 // ============================
-// ROUTE POLYLINES (NEAREST NEIGHBOR)
+// JIGSAW TERRITORIES (VORONOI + CLIP TO ILLINOIS)
 // ============================
 
-function drawRepRoutes() {
-  // Remove old boundaries
-  Object.values(state.polylineLayers).forEach(layer => state.map.removeLayer(layer));
-  state.polylineLayers = {};
+function drawRepTerritories() {
+  // Remove old territories
+  Object.values(state.territoryLayers).flat().forEach(layer => state.map.removeLayer(layer));
+  state.territoryLayers = {};
 
-  const reps = {};
+  if (!state.accounts.length) return;
 
-  state.accounts.forEach(acc => {
+  // Build feature collection of all account points
+  const points = state.accounts.map(a => turf.point([a.lng, a.lat]));
+  const fc = turf.featureCollection(points);
+
+  // Use Illinois bbox so Voronoi fills the state
+  const bbox = turf.bbox(ILLINOIS_BOUNDARY);
+  const voronoi = turf.voronoi(fc, { bbox });
+  if (!voronoi || !voronoi.features.length) return;
+
+  // Map each Voronoi cell to its account & rep
+  const repCells = {};
+  voronoi.features.forEach((cell, i) => {
+    const acc = state.accounts[i];
+    if (!cell || !cell.geometry) return;
+
     const rep = acc.newRep || acc.currentRep || "Unassigned";
-    if (!reps[rep]) reps[rep] = [];
-    reps[rep].push([acc.lng, acc.lat]);
+    if (!repCells[rep]) repCells[rep] = [];
+    repCells[rep].push(cell);
   });
 
-  Object.entries(reps).forEach(([rep, coords]) => {
-    if (coords.length < 3) return;
+  // Merge cells per rep, then clip to Illinois
+  Object.entries(repCells).forEach(([rep, cells]) => {
+    if (!cells.length) return;
 
-    const points = turf.points(coords);
-    const hull = turf.convex(points);
+    let merged = cells[0];
+    for (let i = 1; i < cells.length; i++) {
+      try {
+        merged = turf.union(merged, cells[i]) || merged;
+      } catch {
+        // If union fails, skip that cell
+      }
+    }
 
-    if (!hull) return;
+    const clipped = turf.intersect(merged, ILLINOIS_BOUNDARY);
+    if (!clipped) return;
 
     const color = getColor(rep, "rep");
 
-    const layer = L.geoJSON(hull, {
+    const layer = L.geoJSON(clipped, {
       style: {
         color,
         weight: 2,
-        fillOpacity: 0.1
+        fillOpacity: 0.15
       }
     }).addTo(state.map);
 
-    state.polylineLayers[rep] = layer;
+    if (!state.territoryLayers[rep]) state.territoryLayers[rep] = [];
+    state.territoryLayers[rep].push(layer);
   });
-}
-
-function buildNearestNeighborRoute(accs) {
-  const remaining = [...accs];
-  const route = [];
-
-  let current = remaining.shift();
-  route.push(current);
-
-  while (remaining.length) {
-    let nearest = null;
-    let nearestDist = Infinity;
-
-    remaining.forEach(a => {
-      const d = turf.distance(
-        turf.point([current.lng, current.lat]),
-        turf.point([a.lng, a.lat]),
-        { units: "miles" }
-      );
-
-      if (d < nearestDist) {
-        nearestDist = d;
-        nearest = a;
-      }
-    });
-
-    // Skip extreme outliers from the polyline
-    if (nearestDist > MAX_ROUTE_HOP_MILES) {
-      remaining.splice(remaining.indexOf(nearest), 1);
-      continue;
-    }
-
-    route.push(nearest);
-    remaining.splice(remaining.indexOf(nearest), 1);
-    current = nearest;
-  }
-
-  return route;
 }
 
 
@@ -476,7 +533,7 @@ function showDetails(acc) {
 
 
 // ============================
-// ROUTE SUMMARY TABLE
+// ROUTE SUMMARY TABLE (BY REP)
 // ============================
 
 function updateRouteSummary() {
@@ -484,7 +541,7 @@ function updateRouteSummary() {
 
   state.accounts.forEach(a => {
     const rep = a.newRep || a.currentRep || "Unassigned";
-    if (!byRep[rep]) byRep[rep] = { stops:0, revenue:0 };
+    if (!byRep[rep]) byRep[rep] = { stops: 0, revenue: 0 };
     byRep[rep].stops++;
     byRep[rep].revenue += a.revenue;
   });
@@ -494,11 +551,11 @@ function updateRouteSummary() {
 
   Object.entries(byRep).forEach(([rep, stats]) => {
     const color = getColor(rep, "rep");
-    const avg = stats.revenue / stats.stops;
+    const avg = stats.stops ? stats.revenue / stats.stops : 0;
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><span style="display:inline-block;width:12px;height:12px;background:${color};border:1px solid #000;margin-right:6px;"></span>${rep}</td>
+      <td><span class="rep-swatch" style="background:${color};"></span>${rep}</td>
       <td>${stats.stops}</td>
       <td>$${stats.revenue.toLocaleString()}</td>
       <td>$${avg.toLocaleString()}</td>
@@ -523,7 +580,7 @@ function assignSelected() {
   });
 
   plotAccounts();
-  drawRepRoutes();
+  drawRepTerritories();
   updateRouteSummary();
   updateAllMarkerStyles();
   updateSelectionSummary();
@@ -614,7 +671,7 @@ document.getElementById("color-mode")
 document.getElementById("rep-filter")
   .addEventListener("change", () => {
     plotAccounts();
-    drawRepRoutes();
+    drawRepTerritories();
     updateSelectionSummary();
   });
 
