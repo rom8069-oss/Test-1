@@ -1,5 +1,4 @@
 /* GLOBAL */
-
 html, body {
   margin: 0;
   padding: 0;
@@ -10,7 +9,6 @@ html, body {
 }
 
 /* TOP BAR */
-
 #top-bar {
   display: flex;
   flex-wrap: wrap;
@@ -20,8 +18,14 @@ html, body {
   background: #f7f7f7;
 }
 
-/* MAIN LAYOUT */
+#top-bar select,
+#top-bar button,
+#top-bar input {
+  font-size: 12px;
+  padding: 4px 6px;
+}
 
+/* MAIN LAYOUT */
 #main {
   display: flex;
   height: calc(100vh - 52px);
@@ -40,36 +44,48 @@ html, body {
   background: #fafafa;
 }
 
-/* CONTROLS */
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.controls select,
-.controls button,
-.controls input {
-  font-size: 12px;
-  padding: 4px 6px;
-}
-
-/* SEARCH BAR */
-
+/* SEARCH */
 .search-container {
   display: flex;
   gap: 4px;
-  margin-top: 4px;
 }
 
-.search-container input {
-  flex: 1;
+/* MULTI-REP DROPDOWN */
+#rep-filter-container {
+  position: relative;
+}
+
+#rep-filter-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#rep-filter-dropdown {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px;
+  width: 160px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 9999;
+}
+
+.dropdown-hidden {
+  display: none;
+}
+
+.rep-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
 }
 
 /* TABLES */
-
 table {
   width: 100%;
   border-collapse: collapse;
@@ -93,7 +109,6 @@ th {
 }
 
 /* Rep color swatch */
-
 .rep-swatch {
   display: inline-block;
   width: 12px;
@@ -103,8 +118,7 @@ th {
   vertical-align: middle;
 }
 
-/* DETAIL PANEL */
-
+/* DETAILS */
 #detail-panel {
   border: 1px solid #ddd;
   padding: 6px;
@@ -114,44 +128,16 @@ th {
 }
 
 /* SELECTION SUMMARY */
-
-#selection-summary {
-  margin-top: 8px;
-  font-size: 12px;
-}
-
 #selected-list {
   max-height: 120px;
   overflow-y: auto;
   padding-left: 16px;
 }
 
-/* BUTTONS */
-
-button {
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* LASSO BUTTONS (TOP BAR) */
-
-#lasso-btn,
-#clear-lasso-btn {
-  font-size: 12px;
-  padding: 4px 8px;
-}
-
 /* MAP MARKERS */
-
 .account-pin {
   stroke-width: 1px !important;
 }
-
-/* Selected marker outline */
 
 .selected-marker {
   stroke: black !important;
@@ -159,7 +145,6 @@ button:disabled {
 }
 
 /* TERRITORY POLYGONS */
-
 .leaflet-interactive {
   stroke-linejoin: round;
   stroke-width: 2px;
