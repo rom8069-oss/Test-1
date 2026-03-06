@@ -29,6 +29,22 @@ html, body {
 #map {
   flex: 2;
   height: 100%;
+  pointer-events: auto !important;
+}
+
+.leaflet-container {
+  pointer-events: auto !important;
+}
+
+.leaflet-pane,
+.leaflet-map-pane,
+.leaflet-tile-pane,
+.leaflet-overlay-pane,
+.leaflet-shadow-pane,
+.leaflet-marker-pane,
+.leaflet-tooltip-pane,
+.leaflet-popup-pane {
+  pointer-events: auto !important;
 }
 
 #sidebar {
