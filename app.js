@@ -11,7 +11,6 @@ const state = {
   segmentColors: {},
   premiseColors: {},
   colorMode: "rep",
-  territoryLayers: {},
   lasso: null,
   lassoLayer: null,
   activeReps: new Set()
@@ -58,7 +57,6 @@ function loadCsv(file) {
       buildRepLists();
       buildRepFilterDropdown();
       plotAccounts();
-      drawRepTerritories();
       updateRouteSummary();
       updateSelectionSummary();
 
@@ -172,7 +170,6 @@ function handleRepFilterChange() {
   });
 
   plotAccounts();
-  drawRepTerritories();
   updateSelectionSummary();
 }
 
@@ -265,7 +262,7 @@ function updateAllMarkerStyles() {
 }
 
 /****************************************************
- * LASSO (ON THE MAP)
+ * LASSO (ON THE MAP, NO POLYGONS DRAWN)
  ****************************************************/
 function setupLasso() {
   if (!L.lasso) {
@@ -302,13 +299,10 @@ function setupLasso() {
     updateAllMarkerStyles();
     updateSelectionSummary();
 
-    if (state.lassoLayer) state.map.removeLayer(state.lassoLayer);
-
-    state.lassoLayer = L.polygon(latLngs, {
-      color: "#000",
-      weight: 2,
-      fillOpacity: 0.05
-    }).addTo(state.map);
+    if (state.lassoLayer) {
+      state.map.removeLayer(state.lassoLayer);
+      state.lassoLayer = null;
+    }
   });
 
   // Lasso button
@@ -331,7 +325,7 @@ function setupLasso() {
     onAdd: function () {
       const btn = L.DomUtil.create("button", "leaflet-bar");
       btn.innerHTML = "X";
-      btn.title = "Clear Lasso";
+      btn.title = "Clear Selection";
       L.DomEvent.disableClickPropagation(btn);
       btn.onclick = () => clearLassoAndSelection();
       return btn;
@@ -352,65 +346,6 @@ function clearLassoAndSelection() {
   updateSelectionSummary();
   document.getElementById("detail-panel").innerHTML =
     "<p>No account selected.</p>";
-}
-
-/****************************************************
- * TERRITORIES (VORONOI, NO STATE CLIP)
- ****************************************************/
-function drawRepTerritories() {
-  Object.values(state.territoryLayers).flat().forEach(layer => state.map.removeLayer(layer));
-  state.territoryLayers = {};
-
-  if (!state.accounts.length) return;
-
-  const points = state.accounts
-    .filter(a => state.activeReps.size === 0 || state.activeReps.has(a.newRep || a.currentRep))
-    .map(a => turf.point([a.lng, a.lat]));
-
-  if (!points.length) return;
-
-  const fc = turf.featureCollection(points);
-  const bbox = turf.bbox(fc);
-  const voronoi = turf.voronoi(fc, { bbox });
-
-  if (!voronoi || !voronoi.features.length) return;
-
-  const repCells = {};
-
-  voronoi.features.forEach((cell, i) => {
-    const acc = state.accounts[i];
-    if (!acc || !cell || !cell.geometry) return;
-
-    const rep = acc.newRep || acc.currentRep || "Unassigned";
-    if (state.activeReps.size > 0 && !state.activeReps.has(rep)) return;
-
-    if (!repCells[rep]) repCells[rep] = [];
-    repCells[rep].push(cell);
-  });
-
-  Object.entries(repCells).forEach(([rep, cells]) => {
-    if (!cells.length) return;
-
-    let merged = cells[0];
-    for (let i = 1; i < cells.length; i++) {
-      try {
-        merged = turf.union(merged, cells[i]) || merged;
-      } catch {}
-    }
-
-    const color = getColor(rep, "rep");
-
-    const layer = L.geoJSON(merged, {
-      style: {
-        color,
-        weight: 2,
-        fillOpacity: 0.15
-      }
-    }).addTo(state.map);
-
-    if (!state.territoryLayers[rep]) state.territoryLayers[rep] = [];
-    state.territoryLayers[rep].push(layer);
-  });
 }
 
 /****************************************************
@@ -504,7 +439,6 @@ function assignSelected() {
   });
 
   plotAccounts();
-  drawRepTerritories();
   updateRouteSummary();
   updateAllMarkerStyles();
   updateSelectionSummary();
