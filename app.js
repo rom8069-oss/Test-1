@@ -14,7 +14,7 @@ const state = {
   territoryLayers: {},
   lasso: null,
   lassoLayer: null,
-  activeReps: new Set() // for multi-rep filtering
+  activeReps: new Set()
 };
 
 const colorPalette = [
@@ -23,70 +23,6 @@ const colorPalette = [
   "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494",
   "#b3b3b3", "#1b9e77", "#d95f02", "#7570b3", "#e7298a"
 ];
-
-/****************************************************
- * MEDIUM-PRECISION ILLINOIS BOUNDARY
- ****************************************************/
-const ILLINOIS_BOUNDARY = {
-  "type": "Feature",
-  "properties": { "name": "Illinois" },
-  "geometry": {
-    "type": "Polygon",
-    "coordinates": [[
-      [-91.513079, 42.508481],
-      [-90.639984, 42.510065],
-      [-90.415429, 42.326062],
-      [-90.311367, 42.068233],
-      [-90.179098, 42.008334],
-      [-89.957351, 41.809722],
-      [-89.840449, 41.710409],
-      [-89.730667, 41.453987],
-      [-89.522222, 41.347222],
-      [-89.517222, 41.252222],
-      [-89.409722, 41.179722],
-      [-89.203889, 41.126111],
-      [-88.997222, 41.135833],
-      [-88.834722, 41.026944],
-      [-88.730556, 40.960556],
-      [-88.627222, 40.777222],
-      [-88.514722, 40.679722],
-      [-88.389722, 40.556944],
-      [-88.241389, 40.381389],
-      [-88.142222, 40.235556],
-      [-88.064722, 40.095556],
-      [-87.934722, 39.914722],
-      [-87.835556, 39.771389],
-      [-87.682222, 39.638889],
-      [-87.525556, 39.442222],
-      [-87.525556, 39.356944],
-      [-87.622222, 39.215556],
-      [-87.655556, 39.105556],
-      [-87.682222, 38.955556],
-      [-87.835556, 38.785556],
-      [-87.950556, 38.632222],
-      [-88.064722, 38.474722],
-      [-88.142222, 38.305556],
-      [-88.241389, 38.145556],
-      [-88.389722, 37.995556],
-      [-88.514722, 37.865556],
-      [-88.627222, 37.725556],
-      [-88.730556, 37.575556],
-      [-88.834722, 37.435556],
-      [-88.997222, 37.285556],
-      [-89.203889, 37.135556],
-      [-89.409722, 37.035556],
-      [-89.517222, 36.985556],
-      [-89.730667, 36.993987],
-      [-89.957351, 37.151722],
-      [-90.179098, 37.325334],
-      [-90.311367, 37.508233],
-      [-90.415429, 37.726062],
-      [-90.639984, 37.910065],
-      [-91.513079, 37.908481],
-      [-91.513079, 42.508481]
-    ]]
-  }
-};
 
 /****************************************************
  * MAP INITIALIZATION
@@ -98,10 +34,6 @@ function initMap() {
     .addTo(state.map);
 
   state.markerLayer = L.layerGroup().addTo(state.map);
-
-  L.geoJSON(ILLINOIS_BOUNDARY, {
-    style: { color: "#444", weight: 1, fillOpacity: 0 }
-  }).addTo(state.map);
 
   setupLasso();
 }
@@ -383,13 +315,14 @@ function setupLasso() {
     }).addTo(state.map);
   });
 
-  // Add lasso control button
+  // Lasso control button
   L.Control.LassoControl = L.Control.extend({
     onAdd: function () {
       const btn = L.DomUtil.create("button", "leaflet-bar");
       btn.innerHTML = "L";
       btn.title = "Lasso Select";
 
+      L.DomEvent.disableClickPropagation(btn);
       btn.onclick = () => state.lasso.enable();
       return btn;
     }
@@ -408,6 +341,7 @@ function setupLasso() {
       btn.innerHTML = "X";
       btn.title = "Clear Lasso";
 
+      L.DomEvent.disableClickPropagation(btn);
       btn.onclick = () => clearLassoAndSelection();
       return btn;
     }
@@ -433,7 +367,7 @@ function clearLassoAndSelection() {
 }
 
 /****************************************************
- * TERRITORIES (VORONOI)
+ * TERRITORIES (VORONOI, NO STATE CLIP)
  ****************************************************/
 function drawRepTerritories() {
   Object.values(state.territoryLayers).flat().forEach(layer => state.map.removeLayer(layer));
@@ -448,7 +382,7 @@ function drawRepTerritories() {
   if (!points.length) return;
 
   const fc = turf.featureCollection(points);
-  const bbox = turf.bbox(ILLINOIS_BOUNDARY);
+  const bbox = turf.bbox(fc);
   const voronoi = turf.voronoi(fc, { bbox });
 
   if (!voronoi || !voronoi.features.length) return;
@@ -476,12 +410,9 @@ function drawRepTerritories() {
       } catch {}
     }
 
-    const clipped = turf.intersect(merged, ILLINOIS_BOUNDARY);
-    if (!clipped) return;
-
     const color = getColor(rep, "rep");
 
-    const layer = L.geoJSON(clipped, {
+    const layer = L.geoJSON(merged, {
       style: {
         color,
         weight: 2,
