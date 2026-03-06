@@ -400,6 +400,13 @@ function assignSelected() {
   updateRouteSummary();
   updateAllMarkerStyles();
   updateSelectionSummary();
+
+  // NEW: refresh details panel
+  if (state.selectedIds.size === 1) {
+    const id = Array.from(state.selectedIds)[0];
+    const acc = state.accounts.find(a => a.id === id);
+    if (acc) showDetails(acc);
+  }
 }
 
 // ============================
