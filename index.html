@@ -1,106 +1,139 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Route & Rep Optimizer</title>
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
 
-  <!-- Leaflet Core -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+#app {
+  display: flex;
+  height: 100%;
+}
 
-  <!-- MarkerCluster -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+/* Map + side panel layout */
+#map {
+  flex: 2;
+}
 
-  <!-- Leaflet-Lasso (UMD) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-lasso/dist/leaflet-lasso.css" />
+#sidebar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #ccc;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: auto;
+}
 
-  <!-- Your Styles -->
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
+/* Controls */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
 
-<!-- ============================ -->
-<!-- TOP BAR CONTROLS -->
-<!-- ============================ -->
-<div id="top-bar">
-  <input type="file" id="file-input" accept=".csv" />
+.controls select,
+.controls button,
+.controls input {
+  font-size: 12px;
+  padding: 4px 6px;
+}
 
-  <select id="color-mode">
-    <option value="rep">Color by Rep</option>
-    <option value="segment">Color by Segment</option>
-    <option value="premise">Color by Premise</option>
-  </select>
+#detail-panel {
+  border: 1px solid #ddd;
+  padding: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
 
-  <select id="rep-filter">
-    <option value="">All Reps</option>
-  </select>
+/* Selection summary */
+#selection-summary {
+  margin-top: 8px;
+  font-size: 12px;
+}
 
-  <input type="text" id="search-input" placeholder="Search Customer ID / Company" />
-  <button id="search-btn">Search</button>
+#selected-list {
+  max-height: 120px;
+  overflow-y: auto;
+  padding-left: 16px;
+}
 
-  <select id="rep-select">
-    <option value="">Assign to rep…</option>
-  </select>
+/* Route / rep summary table */
+#route-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 8px;
+}
 
-  <button id="assign-btn" disabled>Assign</button>
-  <button id="export-btn" disabled>Export CSV</button>
-</div>
+#route-table th,
+#route-table td {
+  border: 1px solid #ddd;
+  padding: 4px 6px;
+  text-align: left;
+}
 
-<!-- ============================ -->
-<!-- MAIN LAYOUT -->
-<!-- ============================ -->
-<div id="main">
-  <div id="map"></div>
+#route-table th {
+  background: #f5f5f5;
+}
 
-  <div id="sidebar">
-    <h3>Selection Summary</h3>
-    <p><strong>Stops:</strong> <span id="selected-count">0</span></p>
-    <p><strong>Revenue:</strong> $<span id="selected-revenue">0.00</span></p>
+.rep-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #000;
+  margin-right: 6px;
+}
 
-    <h3>Route Overview</h3>
-    <table id="route-table">
-      <thead>
-        <tr>
-          <th>Rep</th>
-          <th># Stops</th>
-          <th>Total Rev</th>
-          <th>Avg/Stop</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+/* Leaflet controls: lasso + reset */
+.lasso-button,
+.reset-lasso-button {
+  background: #ffffff;
+  color: #000000;
+  font-size: 16px;
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  border: 1px solid #444;
+  cursor: pointer;
+  text-decoration: none;
+}
 
-    <h3>Selected Accounts</h3>
-    <ul id="selected-list"></ul>
+.lasso-button.active {
+  background: #0078ff;
+  color: #ffffff;
+}
 
-    <h3>Account Details</h3>
-    <div id="detail-panel">
-      <p>No account selected.</p>
-    </div>
-  </div>
-</div>
+/* Pins */
+.account-pin {
+  stroke-width: 1px !important;
+}
 
-<!-- ============================ -->
-<!-- SCRIPTS -->
-<!-- ============================ -->
+/* Territory polygons */
+.leaflet-interactive {
+  /* Leaflet uses this class for polygons; we keep styling light */
+  stroke-linejoin: round;
+}
 
-<!-- Leaflet -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+/* Search bar */
+.search-container {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
 
-<!-- MarkerCluster -->
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+.search-container input {
+  flex: 1;
+}
 
-<!-- PapaParse -->
-<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+/* Buttons */
+button {
+  cursor: pointer;
+}
 
-<!-- Turf.js (for concave hulls + point-in-polygon) -->
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-
-<!-- Leaflet-Lasso (UMD build) -->
-<script src="https://unpkg.com/leaflet-lasso/dist/leaflet-lasso.umd.js"></script>
-
-<!-- Your App -->
-<script src="app.js"></script>
-
-</body>
-</html>
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
