@@ -262,7 +262,7 @@ function updateAllMarkerStyles() {
 }
 
 /****************************************************
- * LASSO (ON THE MAP, NO POLYGONS DRAWN)
+ * LASSO
  ****************************************************/
 function setupLasso() {
   if (!L.lasso) {
@@ -270,22 +270,19 @@ function setupLasso() {
     return;
   }
 
-  // 🔥 Critical fix: prevent map from stealing drag events
-  state.map.dragging.disable();
-
   state.lasso = L.lasso(state.map, {
     intersect: true,
     polygon: true
   });
 
   state.map.on("lasso.enabled", () => {
-    // Disable map dragging while drawing
     state.map.dragging.disable();
+    state.map._container.style.touchAction = "none";
   });
 
   state.map.on("lasso.disabled", () => {
-    // Re-enable map dragging after drawing
     state.map.dragging.enable();
+    state.map._container.style.touchAction = "auto";
   });
 
   state.map.on("lasso.finished", event => {
@@ -316,9 +313,10 @@ function setupLasso() {
       state.map.removeLayer(state.lassoLayer);
       state.lassoLayer = null;
     }
+
+    state.map._container.style.touchAction = "auto";
   });
 
-  // Lasso button
   L.Control.LassoControl = L.Control.extend({
     onAdd: function () {
       const btn = L.DomUtil.create("button", "leaflet-bar");
@@ -327,7 +325,8 @@ function setupLasso() {
       L.DomEvent.disableClickPropagation(btn);
       btn.onclick = () => {
         state.lasso.enable();
-        state.map.dragging.disable(); // ensure drag is off
+        state.map.dragging.disable();
+        state.map._container.style.touchAction = "none";
       };
       return btn;
     }
@@ -336,7 +335,6 @@ function setupLasso() {
   L.control.lassoControl = opts => new L.Control.LassoControl(opts);
   L.control.lassoControl({ position: "topleft" }).addTo(state.map);
 
-  // Clear button
   L.Control.ClearLasso = L.Control.extend({
     onAdd: function () {
       const btn = L.DomUtil.create("button", "leaflet-bar");
@@ -360,91 +358,6 @@ function setupLasso() {
 
   L.control.clearLasso = opts => new L.Control.ClearLasso(opts);
   L.control.clearLasso({ position: "topleft" }).addTo(state.map);
-
-  // Re-enable dragging by default
-  state.map.dragging.enable();
-}
-  if (!L.lasso) {
-    console.error("Leaflet-Lasso failed to load");
-    return;
-  }
-
-  state.lasso = L.lasso(state.map, {
-    intersect: true,
-    polygon: true
-  });
-
-  state.map.on("lasso.finished", event => {
-    state.lasso.disable();
-
-    const latLngs = event.latLngs || [];
-    if (!latLngs.length) return;
-
-    const coords = latLngs.map(ll => [ll.lng, ll.lat]);
-    coords.push(coords[0]);
-
-    const polygon = turf.polygon([coords]);
-
-    state.accounts.forEach(acc => {
-      const rep = acc.newRep || acc.currentRep || "";
-      if (state.activeReps.size > 0 && !state.activeReps.has(rep)) return;
-
-      const pt = turf.point([acc.lng, acc.lat]);
-      if (turf.booleanPointInPolygon(pt, polygon)) {
-        state.selectedIds.add(acc.id);
-      }
-    });
-
-    updateAllMarkerStyles();
-    updateSelectionSummary();
-
-    if (state.lassoLayer) {
-      state.map.removeLayer(state.lassoLayer);
-      state.lassoLayer = null;
-    }
-  });
-
-  // Lasso button
-  L.Control.LassoControl = L.Control.extend({
-    onAdd: function () {
-      const btn = L.DomUtil.create("button", "leaflet-bar");
-      btn.innerHTML = "L";
-      btn.title = "Lasso Select";
-      L.DomEvent.disableClickPropagation(btn);
-      btn.onclick = () => state.lasso.enable();
-      return btn;
-    }
-  });
-
-  L.control.lassoControl = opts => new L.Control.LassoControl(opts);
-  L.control.lassoControl({ position: "topleft" }).addTo(state.map);
-
-  // Clear button
-  L.Control.ClearLasso = L.Control.extend({
-    onAdd: function () {
-      const btn = L.DomUtil.create("button", "leaflet-bar");
-      btn.innerHTML = "X";
-      btn.title = "Clear Selection";
-      L.DomEvent.disableClickPropagation(btn);
-      btn.onclick = () => clearLassoAndSelection();
-      return btn;
-    }
-  });
-
-  L.control.clearLasso = opts => new L.Control.ClearLasso(opts);
-  L.control.clearLasso({ position: "topleft" }).addTo(state.map);
-}
-
-function clearLassoAndSelection() {
-  if (state.lassoLayer) {
-    state.map.removeLayer(state.lassoLayer);
-    state.lassoLayer = null;
-  }
-  state.selectedIds.clear();
-  updateAllMarkerStyles();
-  updateSelectionSummary();
-  document.getElementById("detail-panel").innerHTML =
-    "<p>No account selected.</p>";
 }
 
 /****************************************************
