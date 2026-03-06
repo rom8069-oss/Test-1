@@ -5,6 +5,7 @@ html, body {
   font-family: system-ui, sans-serif;
 }
 
+/* TOP BAR */
 #top-bar {
   display: flex;
   flex-wrap: wrap;
@@ -21,6 +22,7 @@ html, body {
   padding: 4px 6px;
 }
 
+/* MAIN LAYOUT */
 #main {
   display: flex;
   height: calc(100vh - 52px);
@@ -39,12 +41,13 @@ html, body {
   background: #fafafa;
 }
 
+/* SEARCH */
 .search-container {
   display: flex;
   gap: 4px;
 }
 
-/* Multi-rep dropdown */
+/* MULTI-REP DROPDOWN */
 #rep-filter-container {
   position: relative;
 }
@@ -78,7 +81,7 @@ html, body {
   margin-bottom: 4px;
 }
 
-/* Table */
+/* TABLES */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -96,6 +99,7 @@ td:first-child {
   text-align: left;
 }
 
+/* Rep color swatch */
 .rep-swatch {
   width: 12px;
   height: 12px;
@@ -104,7 +108,33 @@ td:first-child {
   margin-right: 6px;
 }
 
-/* Lasso buttons */
+/* DETAILS */
+#detail-panel {
+  border: 1px solid #ddd;
+  padding: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  background: #fff;
+}
+
+/* SELECTION SUMMARY */
+#selected-list {
+  max-height: 120px;
+  overflow-y: auto;
+  padding-left: 16px;
+}
+
+/* MAP MARKERS */
+.account-pin {
+  stroke-width: 1px !important;
+}
+
+.selected-marker {
+  stroke: black !important;
+  stroke-width: 3 !important;
+}
+
+/* LASSO CONTROL BUTTONS */
 .leaflet-bar button {
   width: 26px;
   height: 26px;
