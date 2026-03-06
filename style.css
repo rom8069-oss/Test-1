@@ -1,91 +1,202 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Route & Rep Optimizer</title>
+/* ============================
+   GLOBAL
+============================ */
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="styles.css">
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  background: #ffffff;
+}
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+/* ============================
+   TOP BAR
+============================ */
 
-  <!-- Leaflet Lasso -->
-  <script src="https://unpkg.com/leaflet-lasso"></script>
+#top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid #ddd;
+  background: #f7f7f7;
+}
 
-  <!-- Turf.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+/* ============================
+   MAIN LAYOUT
+============================ */
 
-  <!-- PapaParse -->
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+#main {
+  display: flex;
+  height: calc(100vh - 52px);
+}
 
-  <style>
-    /* Ensure map renders correctly */
-    #map { height: 100%; }
-  </style>
-</head>
+#map {
+  flex: 2;
+  height: 100%;
+}
 
-<body>
+#sidebar {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+  border-left: 1px solid #ddd;
+  background: #fafafa;
+}
 
-  <!-- TOP BAR -->
-  <div id="top-bar">
-    <input type="file" id="file-input">
-    <select id="rep-select"></select>
-    <button id="assign-btn" disabled>Assign</button>
+/* ============================
+   CONTROLS
+============================ */
 
-    <select id="rep-filter"></select>
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
 
-    <select id="color-mode">
-      <option value="rep">Color by Rep</option>
-      <option value="segment">Color by Segment</option>
-      <option value="premise">Color by Premise</option>
-    </select>
+.controls select,
+.controls button,
+.controls input {
+  font-size: 12px;
+  padding: 4px 6px;
+}
 
-    <div class="search-container">
-      <input id="search-input" placeholder="Search by ID or Company">
-      <button id="search-btn">Search</button>
-    </div>
+/* ============================
+   SEARCH BAR
+============================ */
 
-    <button id="export-btn" disabled>Export CSV</button>
-  </div>
+.search-container {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
 
-  <!-- MAIN LAYOUT -->
-  <div id="main">
-    <div id="map"></div>
+.search-container input {
+  flex: 1;
+}
 
-    <div id="sidebar">
+/* ============================
+   TABLES
+============================ */
 
-      <h3>Selection Summary</h3>
-      <div id="selection-summary">
-        <p><strong>Selected:</strong> <span id="selected-count">0</span></p>
-        <p><strong>Revenue:</strong> $<span id="selected-revenue">0.00</span></p>
-        <ul id="selected-list"></ul>
-      </div>
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
 
-      <h3>Details</h3>
-      <div id="detail-panel">
-        <p>No account selected.</p>
-      </div>
+th, td {
+  border: 1px solid #ccc;
+  padding: 4px 6px;
+  text-align: right;
+}
 
-      <h3>Rep Overview</h3>
-      <table id="route-table">
-        <thead>
-          <tr>
-            <th>Rep</th>
-            <th>Stops</th>
-            <th>Revenue</th>
-            <th>Avg</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+th:first-child,
+td:first-child {
+  text-align: left;
+}
 
-    </div>
-  </div>
+th {
+  background: #f5f5f5;
+}
 
-  <!-- APP JS -->
-  <script src="app.js"></script>
+/* Rep color swatch in route overview */
+.rep-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #000;
+  margin-right: 6px;
+  vertical-align: middle;
+}
 
-</body>
-</html>
+/* ============================
+   DETAIL PANEL
+============================ */
+
+#detail-panel {
+  border: 1px solid #ddd;
+  padding: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  background: #fff;
+}
+
+/* ============================
+   SELECTION SUMMARY
+============================ */
+
+#selection-summary {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+#selected-list {
+  max-height: 120px;
+  overflow-y: auto;
+  padding-left: 16px;
+}
+
+/* ============================
+   BUTTONS
+============================ */
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ============================
+   LEAFLET CONTROLS (LASSO)
+============================ */
+
+.lasso-button,
+.reset-lasso-button {
+  background: #ffffff;
+  color: #000000;
+  font-size: 16px;
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  border: 1px solid #444;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.lasso-button.active {
+  background: #0078ff;
+  color: #ffffff;
+}
+
+/* ============================
+   MAP MARKERS
+============================ */
+
+.account-pin {
+  stroke-width: 1px !important;
+}
+
+/* Selected marker outline */
+.selected-marker {
+  stroke: black !important;
+  stroke-width: 3 !important;
+}
+
+/* ============================
+   TERRITORY POLYGONS
+============================ */
+
+.leaflet-interactive {
+  stroke-linejoin: round;
+  stroke-width: 2px;
+  fill-opacity: 0.15;
+}
