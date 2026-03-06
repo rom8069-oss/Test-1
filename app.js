@@ -4,7 +4,7 @@
 
 const state = {
   map: null,
-  clusterGroup: null,
+  markerLayer: null,
   accounts: [],
   markersById: {},
   selectedIds: new Set(),
@@ -12,7 +12,7 @@ const state = {
   segmentColors: {},
   premiseColors: {},
   colorMode: "rep",
-  hullLayers: [],
+  polylineLayers: {},
   lasso: null,
   lassoActive: false,
   lassoLayer: null
@@ -22,6 +22,9 @@ const colorPalette = [
   "#e41a1c","#377eb8","#4daf4a","#984ea3",
   "#ff7f00","#a65628","#f781bf","#999999"
 ];
+
+const MAX_ROUTE_HOP_MILES = 15; // Outlier threshold
+
 
 // ============================
 // INIT MAP
@@ -33,52 +36,12 @@ function initMap() {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
     .addTo(state.map);
 
-  state.clusterGroup = createClusterGroup();
-  state.map.addLayer(state.clusterGroup);
+  state.markerLayer = L.layerGroup().addTo(state.map);
 
   enableLasso();
   addResetLassoControl();
 }
 
-// ============================
-// CUSTOM CLUSTER GROUP
-// ============================
-
-function createClusterGroup() {
-  return L.markerClusterGroup({
-    iconCreateFunction: function (cluster) {
-      const markers = cluster.getAllChildMarkers();
-
-      const repCounts = {};
-      markers.forEach(m => {
-        const acc = state.accounts.find(a => a.id === m.accountId);
-        const rep = acc?.newRep || acc?.currentRep || "Unassigned";
-        repCounts[rep] = (repCounts[rep] || 0) + 1;
-      });
-
-      const dominantRep = Object.entries(repCounts)
-        .sort((a, b) => b[1] - a[1])[0][0];
-
-      const color = getColor(dominantRep, "rep");
-
-      return L.divIcon({
-        html: `<div style="
-          background:${color};
-          color:white;
-          border-radius:50%;
-          width:40px;
-          height:40px;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          border:2px solid black;
-        ">${cluster.getChildCount()}</div>`,
-        className: "rep-cluster-icon",
-        iconSize: [40, 40]
-      });
-    }
-  });
-}
 
 // ============================
 // CSV LOADING
@@ -100,7 +63,7 @@ function loadCsv(file) {
 
       buildRepLists();
       plotAccounts();
-      drawRepTerritories();
+      drawRepRoutes();
       updateRouteSummary();
       updateSelectionSummary();
 
@@ -110,18 +73,18 @@ function loadCsv(file) {
   });
 }
 
-function getField(row, possibleKeys) {
-  for (const key of possibleKeys) {
-    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") {
+function getField(row, keys) {
+  for (const key of keys) {
+    if (row[key] !== undefined && String(row[key]).trim() !== "") {
       return row[key];
     }
   }
   return "";
 }
 
-function getNumber(row, possibleKeys) {
-  const raw = getField(row, possibleKeys);
-  if (raw === "") return 0;
+function getNumber(row, keys) {
+  const raw = getField(row, keys);
+  if (!raw) return 0;
   const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ""));
   return isNaN(num) ? 0 : num;
 }
@@ -129,7 +92,6 @@ function getNumber(row, possibleKeys) {
 function normalizeRow(row, idx) {
   const lat = getNumber(row, ["Latitude", "Lat"]);
   const lng = getNumber(row, ["Longitude", "Lng", "Long"]);
-
   if (!lat || !lng) return null;
 
   return {
@@ -149,6 +111,7 @@ function normalizeRow(row, idx) {
   };
 }
 
+
 // ============================
 // REP LISTS
 // ============================
@@ -160,16 +123,14 @@ function buildRepLists() {
   const reps = new Set();
 
   state.accounts.forEach(a => {
-    if (a.currentRep && a.currentRep.trim()) reps.add(a.currentRep.trim());
-    if (a.newRep && a.newRep.trim()) reps.add(a.newRep.trim());
+    if (a.currentRep) reps.add(a.currentRep.trim());
+    if (a.newRep) reps.add(a.newRep.trim());
   });
 
   reps.add("Rep 15");
   reps.add("Rep 16");
 
-  const sorted = Array.from(reps).sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true })
-  );
+  const sorted = [...reps].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
 
   repSelect.innerHTML = '<option value="">Assign to rep…</option>';
   repFilter.innerHTML = '<option value="">All Reps</option>';
@@ -180,16 +141,17 @@ function buildRepLists() {
   });
 }
 
+
 // ============================
-// MARKER RENDERING
+// MARKERS
 // ============================
 
 function plotAccounts() {
-  state.clusterGroup.clearLayers();
+  state.markerLayer.clearLayers();
   state.markersById = {};
 
-  const bounds = [];
   const repFilter = document.getElementById("rep-filter").value || "";
+  const bounds = [];
 
   state.accounts.forEach(acc => {
     const displayRep = acc.newRep || acc.currentRep || "";
@@ -203,21 +165,17 @@ function plotAccounts() {
     marker.accountId = acc.id;
     marker.on("click", e => handleMarkerClick(e, acc));
 
-    state.clusterGroup.addLayer(marker);
+    state.markerLayer.addLayer(marker);
     state.markersById[acc.id] = marker;
-    bounds.push([acc.lat, acc.lng]);
 
     updateMarkerStyle(acc);
+    bounds.push([acc.lat, acc.lng]);
   });
 
   if (bounds.length) {
     state.map.fitBounds(bounds, { padding: [20,20] });
   }
 }
-
-// ============================
-// MARKER STYLE
-// ============================
 
 function updateMarkerStyle(acc) {
   const marker = state.markersById[acc.id];
@@ -228,13 +186,9 @@ function updateMarkerStyle(acc) {
   const prem = acc.premise || "";
 
   let color;
-  if (state.colorMode === "rep") {
-    color = getColor(rep, "rep");
-  } else if (state.colorMode === "segment") {
-    color = getColor(seg, "segment");
-  } else {
-    color = getColor(prem, "premise");
-  }
+  if (state.colorMode === "rep") color = getColor(rep, "rep");
+  else if (state.colorMode === "segment") color = getColor(seg, "segment");
+  else color = getColor(prem, "premise");
 
   marker.setStyle({
     color: state.selectedIds.has(acc.id) ? "black" : color,
@@ -246,10 +200,10 @@ function updateMarkerStyle(acc) {
 function getColor(key, type) {
   if (!key) return "#888";
 
-  let map;
-  if (type === "rep") map = state.repColors;
-  else if (type === "segment") map = state.segmentColors;
-  else map = state.premiseColors;
+  let map =
+    type === "rep" ? state.repColors :
+    type === "segment" ? state.segmentColors :
+    state.premiseColors;
 
   if (!map[key]) {
     const idx = Object.keys(map).length % colorPalette.length;
@@ -258,20 +212,16 @@ function getColor(key, type) {
   return map[key];
 }
 
+
 // ============================
 // SELECTION
 // ============================
 
 function handleMarkerClick(e, acc) {
-  if (!e.originalEvent.shiftKey) {
-    state.selectedIds.clear();
-  }
+  if (!e.originalEvent.shiftKey) state.selectedIds.clear();
 
-  if (state.selectedIds.has(acc.id)) {
-    state.selectedIds.delete(acc.id);
-  } else {
-    state.selectedIds.add(acc.id);
-  }
+  if (state.selectedIds.has(acc.id)) state.selectedIds.delete(acc.id);
+  else state.selectedIds.add(acc.id);
 
   updateAllMarkerStyles();
   updateSelectionSummary();
@@ -282,16 +232,15 @@ function updateAllMarkerStyles() {
   state.accounts.forEach(updateMarkerStyle);
 }
 
+
 // ============================
-// FREEHAND LASSO (LEAFLET-LASSO)
+// LASSO
 // ============================
 
 function enableLasso() {
   if (!L.lasso) return;
 
-  state.lasso = L.lasso(state.map, {
-    intersect: true
-  });
+  state.lasso = L.lasso(state.map, { intersect: true });
 
   const LassoControl = L.Control.extend({
     onAdd: function () {
@@ -326,10 +275,8 @@ function enableLasso() {
     state.lasso.disable();
     state.lassoActive = false;
 
-    const buttonEls = document.getElementsByClassName("lasso-button");
-    if (buttonEls.length) {
-      buttonEls[0].classList.remove("active");
-    }
+    const btn = document.querySelector(".lasso-button");
+    if (btn) btn.classList.remove("active");
 
     const latLngs = event.latLngs || [];
     if (!latLngs.length) return;
@@ -344,7 +291,7 @@ function enableLasso() {
 
     const polygon = turf.polygon([coords]);
 
-    // KEEP existing selection, add new accounts inside lasso
+    // KEEP previous selection, add new
     state.accounts.forEach(acc => {
       const pt = turf.point([acc.lng, acc.lat]);
       if (turf.booleanPointInPolygon(pt, polygon)) {
@@ -355,10 +302,8 @@ function enableLasso() {
     updateAllMarkerStyles();
     updateSelectionSummary();
 
-    // Replace previous lasso polygon with the new one
-    if (state.lassoLayer) {
-      state.map.removeLayer(state.lassoLayer);
-    }
+    // Replace previous lasso polygon
+    if (state.lassoLayer) state.map.removeLayer(state.lassoLayer);
 
     state.lassoLayer = L.polygon(latLngs, {
       color: "#000",
@@ -368,8 +313,9 @@ function enableLasso() {
   });
 }
 
+
 // ============================
-// RESET LASSO CONTROL
+// RESET LASSO
 // ============================
 
 function addResetLassoControl() {
@@ -385,20 +331,15 @@ function addResetLassoControl() {
         L.DomEvent.stopPropagation(e);
         L.DomEvent.preventDefault(e);
 
-        // Remove lasso polygon
         if (state.lassoLayer) {
           state.map.removeLayer(state.lassoLayer);
           state.lassoLayer = null;
         }
 
-        // Clear selected accounts
         state.selectedIds.clear();
-
-        // Refresh UI
         updateAllMarkerStyles();
         updateSelectionSummary();
 
-        // Clear details panel
         document.getElementById("detail-panel").innerHTML =
           "<p>No account selected.</p>";
       });
@@ -409,6 +350,85 @@ function addResetLassoControl() {
 
   state.map.addControl(new ResetControl({ position: "topleft" }));
 }
+
+
+// ============================
+// ROUTE POLYLINES (NEAREST NEIGHBOR)
+// ============================
+
+function drawRepRoutes() {
+  // Remove old polylines
+  Object.values(state.polylineLayers).forEach(layer => state.map.removeLayer(layer));
+  state.polylineLayers = {};
+
+  const reps = {};
+
+  state.accounts.forEach(acc => {
+    const rep = acc.newRep || acc.currentRep || "Unassigned";
+    if (!reps[rep]) reps[rep] = [];
+    reps[rep].push(acc);
+  });
+
+  Object.entries(reps).forEach(([rep, accs]) => {
+    if (accs.length < 2) return;
+
+    const color = getColor(rep, "rep");
+
+    // Build nearest-neighbor route
+    const route = buildNearestNeighborRoute(accs);
+
+    if (!route.length) return;
+
+    const latlngs = route.map(a => [a.lat, a.lng]);
+
+    const polyline = L.polyline(latlngs, {
+      color,
+      weight: 3,
+      opacity: 0.9
+    }).addTo(state.map);
+
+    state.polylineLayers[rep] = polyline;
+  });
+}
+
+function buildNearestNeighborRoute(accs) {
+  const remaining = [...accs];
+  const route = [];
+
+  let current = remaining.shift();
+  route.push(current);
+
+  while (remaining.length) {
+    let nearest = null;
+    let nearestDist = Infinity;
+
+    remaining.forEach(a => {
+      const d = turf.distance(
+        turf.point([current.lng, current.lat]),
+        turf.point([a.lng, a.lat]),
+        { units: "miles" }
+      );
+
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = a;
+      }
+    });
+
+    // Skip extreme outliers from the polyline
+    if (nearestDist > MAX_ROUTE_HOP_MILES) {
+      remaining.splice(remaining.indexOf(nearest), 1);
+      continue;
+    }
+
+    route.push(nearest);
+    remaining.splice(remaining.indexOf(nearest), 1);
+    current = nearest;
+  }
+
+  return route;
+}
+
 
 // ============================
 // SELECTION SUMMARY + DETAILS
@@ -452,8 +472,9 @@ function showDetails(acc) {
   `;
 }
 
+
 // ============================
-// ROUTE SUMMARY (WITH COLOR SWATCH)
+// ROUTE SUMMARY TABLE
 // ============================
 
 function updateRouteSummary() {
@@ -484,6 +505,7 @@ function updateRouteSummary() {
   });
 }
 
+
 // ============================
 // ASSIGNMENT
 // ============================
@@ -499,17 +521,18 @@ function assignSelected() {
   });
 
   plotAccounts();
-  drawRepTerritories();
+  drawRepRoutes();
   updateRouteSummary();
   updateAllMarkerStyles();
   updateSelectionSummary();
 
   if (state.selectedIds.size === 1) {
-    const id = Array.from(state.selectedIds)[0];
+    const id = [...state.selectedIds][0];
     const acc = state.accounts.find(a => a.id === id);
     if (acc) showDetails(acc);
   }
 }
+
 
 // ============================
 // EXPORT
@@ -527,6 +550,7 @@ function exportCsv() {
 
   URL.revokeObjectURL(url);
 }
+
 
 // ============================
 // SEARCH
@@ -565,43 +589,6 @@ function searchAccounts() {
   setTimeout(() => state.map.removeLayer(ring), 2000);
 }
 
-// ============================
-// REP TERRITORIES (CONCAVE HULLS)
-// ============================
-
-function drawRepTerritories() {
-  state.hullLayers.forEach(layer => state.map.removeLayer(layer));
-  state.hullLayers = [];
-
-  const reps = {};
-
-  state.accounts.forEach(acc => {
-    const rep = acc.newRep || acc.currentRep || "Unassigned";
-    if (!reps[rep]) reps[rep] = [];
-    reps[rep].push([acc.lng, acc.lat]);
-  });
-
-  Object.entries(reps).forEach(([rep, coords]) => {
-    if (coords.length < 3) return;
-
-    const points = turf.points(coords);
-    const hull = turf.concave(points, { maxEdge: 1 });
-
-    if (!hull) return;
-
-    const color = getColor(rep, "rep");
-
-    const layer = L.geoJSON(hull, {
-      style: {
-        color,
-        weight: 2,
-        fillOpacity: 0.1
-      }
-    }).addTo(state.map);
-
-    state.hullLayers.push(layer);
-  });
-}
 
 // ============================
 // EVENTS
@@ -625,7 +612,7 @@ document.getElementById("color-mode")
 document.getElementById("rep-filter")
   .addEventListener("change", () => {
     plotAccounts();
-    drawRepTerritories();
+    drawRepRoutes();
     updateSelectionSummary();
   });
 
