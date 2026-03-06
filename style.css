@@ -1,6 +1,4 @@
-/* ============================
-   GLOBAL
-============================ */
+/* GLOBAL */
 
 html, body {
   margin: 0;
@@ -11,9 +9,7 @@ html, body {
   background: #ffffff;
 }
 
-/* ============================
-   TOP BAR
-============================ */
+/* TOP BAR */
 
 #top-bar {
   display: flex;
@@ -24,9 +20,7 @@ html, body {
   background: #f7f7f7;
 }
 
-/* ============================
-   MAIN LAYOUT
-============================ */
+/* MAIN LAYOUT */
 
 #main {
   display: flex;
@@ -46,9 +40,7 @@ html, body {
   background: #fafafa;
 }
 
-/* ============================
-   CONTROLS
-============================ */
+/* CONTROLS */
 
 .controls {
   display: flex;
@@ -64,9 +56,7 @@ html, body {
   padding: 4px 6px;
 }
 
-/* ============================
-   SEARCH BAR
-============================ */
+/* SEARCH BAR */
 
 .search-container {
   display: flex;
@@ -78,9 +68,7 @@ html, body {
   flex: 1;
 }
 
-/* ============================
-   TABLES
-============================ */
+/* TABLES */
 
 table {
   width: 100%;
@@ -104,7 +92,8 @@ th {
   background: #f5f5f5;
 }
 
-/* Rep color swatch in route overview */
+/* Rep color swatch */
+
 .rep-swatch {
   display: inline-block;
   width: 12px;
@@ -114,9 +103,7 @@ th {
   vertical-align: middle;
 }
 
-/* ============================
-   DETAIL PANEL
-============================ */
+/* DETAIL PANEL */
 
 #detail-panel {
   border: 1px solid #ddd;
@@ -126,9 +113,7 @@ th {
   background: #fff;
 }
 
-/* ============================
-   SELECTION SUMMARY
-============================ */
+/* SELECTION SUMMARY */
 
 #selection-summary {
   margin-top: 8px;
@@ -141,9 +126,7 @@ th {
   padding-left: 16px;
 }
 
-/* ============================
-   BUTTONS
-============================ */
+/* BUTTONS */
 
 button {
   cursor: pointer;
@@ -154,46 +137,28 @@ button:disabled {
   cursor: default;
 }
 
-/* ============================
-   LEAFLET CONTROLS (LASSO)
-============================ */
+/* LASSO BUTTONS (TOP BAR) */
 
-.lasso-button,
-.reset-lasso-button {
-  background: #ffffff;
-  color: #000000;
-  font-size: 16px;
-  width: 30px;
-  height: 30px;
-  line-height: 30px;
-  text-align: center;
-  border: 1px solid #444;
-  cursor: pointer;
-  text-decoration: none;
+#lasso-btn,
+#clear-lasso-btn {
+  font-size: 12px;
+  padding: 4px 8px;
 }
 
-.lasso-button.active {
-  background: #0078ff;
-  color: #ffffff;
-}
-
-/* ============================
-   MAP MARKERS
-============================ */
+/* MAP MARKERS */
 
 .account-pin {
   stroke-width: 1px !important;
 }
 
 /* Selected marker outline */
+
 .selected-marker {
   stroke: black !important;
   stroke-width: 3 !important;
 }
 
-/* ============================
-   TERRITORY POLYGONS
-============================ */
+/* TERRITORY POLYGONS */
 
 .leaflet-interactive {
   stroke-linejoin: round;
