@@ -100,7 +100,6 @@ function initMap() {
 
   state.markerLayer = L.layerGroup().addTo(state.map);
 
-  // Optional: draw Illinois outline for reference
   L.geoJSON(ILLINOIS_BOUNDARY, {
     style: {
       color: "#444",
@@ -109,8 +108,7 @@ function initMap() {
     }
   }).addTo(state.map);
 
-  enableLasso();
-  addResetLassoControl();
+  setupLasso();
 }
 
 
@@ -292,6 +290,7 @@ function getColor(key, type) {
 // ============================
 
 function handleMarkerClick(e, acc) {
+  // Simple click-to-select (Option A)
   if (!e.originalEvent.shiftKey) state.selectedIds.clear();
 
   if (state.selectedIds.has(acc.id)) state.selectedIds.delete(acc.id);
@@ -308,49 +307,17 @@ function updateAllMarkerStyles() {
 
 
 // ============================
-// LASSO
+// LASSO (TOP BAR BUTTONS)
 // ============================
 
-function enableLasso() {
+function setupLasso() {
   if (!L.lasso) return;
 
   state.lasso = L.lasso(state.map, { intersect: true });
 
-  const LassoControl = L.Control.extend({
-    onAdd: function () {
-      const container = L.DomUtil.create("div", "leaflet-bar");
-      const button = L.DomUtil.create("a", "lasso-button", container);
-      button.href = "#";
-      button.title = "Freehand Lasso Select";
-      button.innerHTML = "⭘";
-
-      L.DomEvent.on(button, "click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        L.DomEvent.preventDefault(e);
-
-        if (state.lassoActive) {
-          state.lasso.disable();
-          state.lassoActive = false;
-          button.classList.remove("active");
-        } else {
-          state.lasso.enable();
-          state.lassoActive = true;
-          button.classList.add("active");
-        }
-      });
-
-      return container;
-    }
-  });
-
-  state.map.addControl(new LassoControl({ position: "topleft" }));
-
   state.map.on("lasso.finished", (event) => {
     state.lasso.disable();
     state.lassoActive = false;
-
-    const btn = document.querySelector(".lasso-button");
-    if (btn) btn.classList.remove("active");
 
     const latLngs = event.latLngs || [];
     if (!latLngs.length) return;
@@ -365,7 +332,6 @@ function enableLasso() {
 
     const polygon = turf.polygon([coords]);
 
-    // Add to existing selection
     state.accounts.forEach(acc => {
       const pt = turf.point([acc.lng, acc.lat]);
       if (turf.booleanPointInPolygon(pt, polygon)) {
@@ -376,7 +342,6 @@ function enableLasso() {
     updateAllMarkerStyles();
     updateSelectionSummary();
 
-    // Replace previous lasso polygon
     if (state.lassoLayer) state.map.removeLayer(state.lassoLayer);
 
     state.lassoLayer = L.polygon(latLngs, {
@@ -387,66 +352,42 @@ function enableLasso() {
   });
 }
 
+function startLasso() {
+  if (!state.lasso) return;
+  state.lasso.enable();
+  state.lassoActive = true;
+}
 
-// ============================
-// RESET LASSO
-// ============================
-
-function addResetLassoControl() {
-  const ResetControl = L.Control.extend({
-    onAdd: function () {
-      const container = L.DomUtil.create("div", "leaflet-bar");
-      const button = L.DomUtil.create("a", "reset-lasso-button", container);
-      button.href = "#";
-      button.title = "Clear Lasso & Selection";
-      button.innerHTML = "✖";
-
-      L.DomEvent.on(button, "click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        L.DomEvent.preventDefault(e);
-
-        if (state.lassoLayer) {
-          state.map.removeLayer(state.lassoLayer);
-          state.lassoLayer = null;
-        }
-
-        state.selectedIds.clear();
-        updateAllMarkerStyles();
-        updateSelectionSummary();
-
-        document.getElementById("detail-panel").innerHTML =
-          "<p>No account selected.</p>";
-      });
-
-      return container;
-    }
-  });
-
-  state.map.addControl(new ResetControl({ position: "topleft" }));
+function clearLassoAndSelection() {
+  if (state.lassoLayer) {
+    state.map.removeLayer(state.lassoLayer);
+    state.lassoLayer = null;
+  }
+  state.selectedIds.clear();
+  updateAllMarkerStyles();
+  updateSelectionSummary();
+  document.getElementById("detail-panel").innerHTML =
+    "<p>No account selected.</p>";
 }
 
 
 // ============================
-// JIGSAW TERRITORIES (VORONOI + CLIP TO ILLINOIS)
+// JIGSAW TERRITORIES
 // ============================
 
 function drawRepTerritories() {
-  // Remove old territories
   Object.values(state.territoryLayers).flat().forEach(layer => state.map.removeLayer(layer));
   state.territoryLayers = {};
 
   if (!state.accounts.length) return;
 
-  // Build feature collection of all account points
   const points = state.accounts.map(a => turf.point([a.lng, a.lat]));
   const fc = turf.featureCollection(points);
 
-  // Use Illinois bbox so Voronoi fills the state
   const bbox = turf.bbox(ILLINOIS_BOUNDARY);
   const voronoi = turf.voronoi(fc, { bbox });
   if (!voronoi || !voronoi.features.length) return;
 
-  // Map each Voronoi cell to its account & rep
   const repCells = {};
   voronoi.features.forEach((cell, i) => {
     const acc = state.accounts[i];
@@ -457,7 +398,6 @@ function drawRepTerritories() {
     repCells[rep].push(cell);
   });
 
-  // Merge cells per rep, then clip to Illinois
   Object.entries(repCells).forEach(([rep, cells]) => {
     if (!cells.length) return;
 
@@ -466,7 +406,7 @@ function drawRepTerritories() {
       try {
         merged = turf.union(merged, cells[i]) || merged;
       } catch {
-        // If union fails, skip that cell
+        // skip bad union
       }
     }
 
@@ -533,7 +473,7 @@ function showDetails(acc) {
 
 
 // ============================
-// ROUTE SUMMARY TABLE (BY REP)
+// ROUTE SUMMARY TABLE
 // ============================
 
 function updateRouteSummary() {
@@ -688,5 +628,11 @@ document.getElementById("search-input")
   .addEventListener("keydown", e => {
     if (e.key === "Enter") searchAccounts();
   });
+
+document.getElementById("lasso-btn")
+  .addEventListener("click", startLasso);
+
+document.getElementById("clear-lasso-btn")
+  .addEventListener("click", clearLassoAndSelection);
 
 window.addEventListener("DOMContentLoaded", initMap);
