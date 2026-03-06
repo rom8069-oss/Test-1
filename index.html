@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Route & Rep Optimizer</title>
 
-  <!-- Your CSS -->
+  <!-- CSS -->
   <link rel="stylesheet" href="style.css">
 
   <!-- Leaflet -->
@@ -29,27 +29,36 @@
 
   <!-- TOP BAR -->
   <div id="top-bar">
+
+    <!-- File Upload -->
     <input type="file" id="file-input">
-    <select id="rep-select"></select>
-    <button id="assign-btn" disabled>Assign</button>
 
-    <select id="rep-filter"></select>
-
+    <!-- Color Mode -->
     <select id="color-mode">
       <option value="rep">Color by Rep</option>
       <option value="segment">Color by Segment</option>
       <option value="premise">Color by Premise</option>
     </select>
 
+    <!-- Multi-Rep Filter -->
+    <div id="rep-filter-container">
+      <button id="rep-filter-btn">Reps ▼</button>
+      <div id="rep-filter-dropdown" class="dropdown-hidden"></div>
+    </div>
+
+    <!-- Search -->
     <div class="search-container">
       <input id="search-input" placeholder="Search by ID or Company">
       <button id="search-btn">Search</button>
     </div>
 
-    <button id="lasso-btn">Lasso Select</button>
-    <button id="clear-lasso-btn">Clear Lasso & Selection</button>
+    <!-- Assign -->
+    <select id="rep-select"></select>
+    <button id="assign-btn" disabled>Assign</button>
 
+    <!-- Export -->
     <button id="export-btn" disabled>Export CSV</button>
+
   </div>
 
   <!-- MAIN LAYOUT -->
