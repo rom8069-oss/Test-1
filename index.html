@@ -2,30 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Route & Rep Optimizer</title> 
+  <title>Route & Rep Optimizer</title>
 
-  <!-- CSS -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Local Lasso (CDN blocked on your network) -->
+  <!-- Local Lasso -->
   <script src="leaflet-lasso.min.js"></script>
 
-  <!-- Turf.js -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-
-  <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 
 <body>
 
-  <!-- TOP BAR -->
   <div id="top-bar">
-
     <input type="file" id="file-input">
 
     <select id="color-mode">
@@ -48,10 +41,8 @@
     <button id="assign-btn" disabled>Assign</button>
 
     <button id="export-btn" disabled>Export CSV</button>
-
   </div>
 
-  <!-- MAIN -->
   <div id="main">
     <div id="map"></div>
 
@@ -61,31 +52,3 @@
       <div id="selection-summary">
         <p><strong>Selected:</strong> <span id="selected-count">0</span></p>
         <p><strong>Revenue:</strong> $<span id="selected-revenue">0.00</span></p>
-        <ul id="selected-list"></ul>
-      </div>
-
-      <h3>Details</h3>
-      <div id="detail-panel">
-        <p>No account selected.</p>
-      </div>
-
-      <h3>Rep Overview</h3>
-      <table id="route-table">
-        <thead>
-          <tr>
-            <th>Rep</th>
-            <th>Stops</th>
-            <th>Revenue</th>
-            <th>Avg</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-
-    </div>
-  </div>
-
-  <script src="app.js"></script>
-
-</body>
-</html>
