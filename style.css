@@ -150,3 +150,18 @@ th {
   stroke-width: 2px;
   fill-opacity: 0.15;
 }
+
+/* LASSO CONTROL BUTTONS */
+.leaflet-bar button {
+  width: 26px;
+  height: 26px;
+  line-height: 24px;
+  text-align: center;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+.leaflet-bar button:hover {
+  background: #eee;
+}
