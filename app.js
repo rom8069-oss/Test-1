@@ -268,15 +268,14 @@ function updateAllMarkerStyles() {
  * LASSO (ON THE MAP)
  ****************************************************/
 function setupLasso() {
-  if (typeof L.lasso !== "function") {
+  if (!L.lasso) {
     console.error("Leaflet-Lasso failed to load");
     return;
   }
 
   state.lasso = L.lasso(state.map, {
     intersect: true,
-    polygon: true,
-    smoothFactor: 1.0
+    polygon: true
   });
 
   state.map.on("lasso.finished", event => {
@@ -286,10 +285,7 @@ function setupLasso() {
     if (!latLngs.length) return;
 
     const coords = latLngs.map(ll => [ll.lng, ll.lat]);
-    if (coords[0][0] !== coords[coords.length - 1][0] ||
-        coords[0][1] !== coords[coords.length - 1][1]) {
-      coords.push(coords[0]);
-    }
+    coords.push(coords[0]);
 
     const polygon = turf.polygon([coords]);
 
@@ -315,42 +311,34 @@ function setupLasso() {
     }).addTo(state.map);
   });
 
-  // Lasso control button
+  // Lasso button
   L.Control.LassoControl = L.Control.extend({
     onAdd: function () {
       const btn = L.DomUtil.create("button", "leaflet-bar");
       btn.innerHTML = "L";
       btn.title = "Lasso Select";
-
       L.DomEvent.disableClickPropagation(btn);
       btn.onclick = () => state.lasso.enable();
       return btn;
     }
   });
 
-  L.control.lassoControl = function (opts) {
-    return new L.Control.LassoControl(opts);
-  };
-
+  L.control.lassoControl = opts => new L.Control.LassoControl(opts);
   L.control.lassoControl({ position: "topleft" }).addTo(state.map);
 
-  // Clear lasso button
+  // Clear button
   L.Control.ClearLasso = L.Control.extend({
     onAdd: function () {
       const btn = L.DomUtil.create("button", "leaflet-bar");
       btn.innerHTML = "X";
       btn.title = "Clear Lasso";
-
       L.DomEvent.disableClickPropagation(btn);
       btn.onclick = () => clearLassoAndSelection();
       return btn;
     }
   });
 
-  L.control.clearLasso = function (opts) {
-    return new L.Control.ClearLasso(opts);
-  };
-
+  L.control.clearLasso = opts => new L.Control.ClearLasso(opts);
   L.control.clearLasso({ position: "topleft" }).addTo(state.map);
 }
 
