@@ -275,15 +275,15 @@ function setupLasso() {
     polygon: true
   });
 
-  state.map.on("lasso.enabled", () => {
-    state.map.dragging.disable();
-    state.map._container.style.touchAction = "none";
-  });
+//  state.map.on("lasso.enabled", () => {
+//    state.map.dragging.disable();
+//    state.map._container.style.touchAction = "none";
+//  });
 
-  state.map.on("lasso.disabled", () => {
-    state.map.dragging.enable();
-    state.map._container.style.touchAction = "auto";
-  });
+//  state.map.on("lasso.disabled", () => {
+//    state.map.dragging.enable();
+//    state.map._container.style.touchAction = "auto";
+//  });
 
   state.map.on("lasso.finished", event => {
     state.lasso.disable();
@@ -334,8 +334,6 @@ function setupLasso() {
       L.DomEvent.disableClickPropagation(btn);
       btn.onclick = () => {
         state.lasso.enable();
-        state.map.dragging.disable();
-        state.map._container.style.touchAction = "none";
       };
       return btn;
     }
