@@ -71,12 +71,6 @@ function getField(row, keys) {
     if (row[key] !== undefined && String(row[key]).trim() !== "") {
       return row[key];
     }
-// Simple Leaflet Lasso for browser (no require, no modules)
-(function (factory) {
-  if (typeof L !== "undefined") {
-    factory(L);
-  } else {
-    console.error("Leaflet not found. Lasso cannot initialize.");
   }
   return "";
 }
@@ -211,11 +205,6 @@ function plotAccounts() {
 
   if (bounds.length) {
     state.map.fitBounds(bounds, { padding: [20, 20] });
-})(function (L) {
-  function distance(a, b) {
-    var dx = a.x - b.x;
-    var dy = a.y - b.y;
-    return Math.sqrt(dx * dx + dy * dy);
   }
 }
 
@@ -250,8 +239,6 @@ function getColor(key, type) {
   if (!map[key]) {
     const idx = Object.keys(map).length % colorPalette.length;
     map[key] = colorPalette[idx];
-  function samePoint(a, b) {
-    return Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
   }
   return map[key];
 }
@@ -261,11 +248,6 @@ function getColor(key, type) {
  ****************************************************/
 function handleMarkerClick(e, acc) {
   if (!e.originalEvent.shiftKey) state.selectedIds.clear();
-  function Lasso(map) {
-    this._map = map;
-    this._enabled = false;
-    this._polygon = [];
-    this._polyline = null;
 
   if (state.selectedIds.has(acc.id)) state.selectedIds.delete(acc.id);
   else state.selectedIds.add(acc.id);
@@ -286,9 +268,6 @@ function setupLasso() {
   if (!L.lasso) {
     console.error("Leaflet-Lasso failed to load");
     return;
-    this._onMouseDown = this._onMouseDown.bind(this);
-    this._onMouseMove = this._onMouseMove.bind(this);
-    this._onMouseUp = this._onMouseUp.bind(this);
   }
 
   state.lasso = L.lasso(state.map, {
@@ -315,7 +294,20 @@ function setupLasso() {
     const coords = latLngs.map(ll => [ll.lng, ll.lat]);
     coords.push(coords[0]);
 
+    if (state.lassoLayer) {
+      state.map.removeLayer(state.lassoLayer);
+      state.lassoLayer = null;
+    }
+
+    state.lassoLayer = L.polygon(latLngs, {
+      color: "#000",
+      weight: 1,
+      fillOpacity: 0.05
+    }).addTo(state.map);
+
     const polygon = turf.polygon([coords]);
+
+    state.selectedIds.clear();
 
     state.accounts.forEach(acc => {
       const rep = acc.newRep || acc.currentRep || "";
@@ -330,14 +322,10 @@ function setupLasso() {
     updateAllMarkerStyles();
     updateSelectionSummary();
 
-    if (state.lassoLayer) {
-      state.map.removeLayer(state.lassoLayer);
-      state.lassoLayer = null;
-    }
-
     state.map._container.style.touchAction = "auto";
   });
 
+  // Lasso control button
   L.Control.LassoControl = L.Control.extend({
     onAdd: function () {
       const btn = L.DomUtil.create("button", "leaflet-bar");
@@ -352,25 +340,11 @@ function setupLasso() {
       return btn;
     }
   });
-  Lasso.prototype.enable = function () {
-    if (this._enabled) return;
-    this._enabled = true;
-    this._map.dragging.disable();
-    this._map.on("mousedown", this._onMouseDown);
-  };
 
   L.control.lassoControl = opts => new L.Control.LassoControl(opts);
   L.control.lassoControl({ position: "topleft" }).addTo(state.map);
-  Lasso.prototype.disable = function () {
-    if (!this._enabled) return;
-    this._enabled = false;
-    this._map.dragging.enable();
-    this._map.off("mousedown", this._onMouseDown);
-    this._map.off("mousemove", this._onMouseMove);
-    this._map.off("mouseup", this._onMouseUp);
-    this._clear();
-  };
 
+  // Clear lasso / selection control
   L.Control.ClearLasso = L.Control.extend({
     onAdd: function () {
       const btn = L.DomUtil.create("button", "leaflet-bar");
@@ -389,11 +363,6 @@ function setupLasso() {
           "<p>No account selected.</p>";
       };
       return btn;
-  Lasso.prototype._clear = function () {
-    this._polygon = [];
-    if (this._polyline) {
-      this._map.removeLayer(this._polyline);
-      this._polyline = null;
     }
   });
 
@@ -459,17 +428,10 @@ function updateRouteSummary() {
 
   const tbody = document.querySelector("#route-table tbody");
   tbody.innerHTML = "";
-  };
 
   Object.entries(byRep).forEach(([rep, stats]) => {
     const color = getColor(rep, "rep");
     const avg = stats.stops ? stats.revenue / stats.stops : 0;
-  Lasso.prototype._onMouseDown = function (e) {
-    this._polygon = [e.latlng];
-    this._polyline = L.polyline(this._polygon, {
-      color: "#000",
-      weight: 2
-    }).addTo(this._map);
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -484,9 +446,6 @@ function updateRouteSummary() {
     tbody.appendChild(tr);
   });
 }
-    this._map.on("mousemove", this._onMouseMove);
-    this._map.on("mouseup", this._onMouseUp);
-  };
 
 /****************************************************
  * ASSIGNMENT
@@ -494,17 +453,10 @@ function updateRouteSummary() {
 function assignSelected() {
   const rep = document.getElementById("rep-select").value;
   if (!rep) return;
-  Lasso.prototype._onMouseMove = function (e) {
-    var last = this._polygon[this._polygon.length - 1];
-    var ptLast = this._map.latLngToLayerPoint(last);
-    var ptNew = this._map.latLngToLayerPoint(e.latlng);
 
   state.accounts.forEach(acc => {
     if (state.selectedIds.has(acc.id)) {
       acc.newRep = rep;
-    if (distance(ptLast, ptNew) > 2) {
-      this._polygon.push(e.latlng);
-      this._polyline.setLatLngs(this._polygon);
     }
   });
 
@@ -578,27 +530,16 @@ function searchAccounts() {
 function setupRepFilterDropdownBehavior() {
   const btn = document.getElementById("rep-filter-btn");
   const dropdown = document.getElementById("rep-filter-dropdown");
-  };
 
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     dropdown.classList.toggle("dropdown-hidden");
   });
-  Lasso.prototype._onMouseUp = function () {
-    this._map.off("mousemove", this._onMouseMove);
-    this._map.off("mouseup", this._onMouseUp);
 
   document.addEventListener("click", (e) => {
     if (!dropdown.classList.contains("dropdown-hidden")) {
       const within = dropdown.contains(e.target) || btn.contains(e.target);
       if (!within) dropdown.classList.add("dropdown-hidden");
-    var poly = this._polygon;
-    if (poly.length > 2) {
-      var first = this._map.latLngToLayerPoint(poly[0]);
-      var last = this._map.latLngToLayerPoint(poly[poly.length - 1]);
-      if (!samePoint(first, last) && distance(first, last) < 10) {
-        poly.push(poly[0]);
-      }
     }
   });
 }
@@ -634,14 +575,11 @@ document.getElementById("search-input")
   .addEventListener("keydown", e => {
     if (e.key === "Enter") searchAccounts();
   });
-    this._map.fire("lasso.finished", { latLngs: poly });
-    this._clear();
-  };
 
+/****************************************************
+ * BOOTSTRAP
+ ****************************************************/
 window.addEventListener("DOMContentLoaded", () => {
   initMap();
   setupRepFilterDropdownBehavior();
-  L.lasso = function (map, options) {
-    return new Lasso(map, options || {});
-  };
 });
