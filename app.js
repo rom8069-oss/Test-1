@@ -1,97 +1,139 @@
-// Simple Leaflet Lasso for browser (no require, no modules)
-(function (factory) {
-  if (typeof L !== "undefined") {
-    factory(L);
-  } else {
-    console.error("Leaflet not found. Lasso cannot initialize.");
-  }
-})(function (L) {
-  function distance(a, b) {
-    var dx = a.x - b.x;
-    var dy = a.y - b.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
+// ===============================
+// MAP INITIALIZATION
+// ===============================
+let map = L.map("map", {
+  preferCanvas: true
+}).setView([41.88, -87.63], 10);
 
-  function samePoint(a, b) {
-    return Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
-  }
+// Base map
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19
+}).addTo(map);
 
-  function Lasso(map) {
-    this._map = map;
-    this._enabled = false;
-    this._polygon = [];
-    this._polyline = null;
+// ===============================
+// GLOBAL STATE
+// ===============================
+let accountMarkers = [];
+let reps = {};
+let selectedRep = null;
 
-    this._onMouseDown = this._onMouseDown.bind(this);
-    this._onMouseMove = this._onMouseMove.bind(this);
-    this._onMouseUp = this._onMouseUp.bind(this);
-  }
-
-  Lasso.prototype.enable = function () {
-    if (this._enabled) return;
-    this._enabled = true;
-    this._map.dragging.disable();
-    this._map.on("mousedown", this._onMouseDown);
-  };
-
-  Lasso.prototype.disable = function () {
-    if (!this._enabled) return;
-    this._enabled = false;
-    this._map.dragging.enable();
-    this._map.off("mousedown", this._onMouseDown);
-    this._map.off("mousemove", this._onMouseMove);
-    this._map.off("mouseup", this._onMouseUp);
-    this._clear();
-  };
-
-  Lasso.prototype._clear = function () {
-    this._polygon = [];
-    if (this._polyline) {
-      this._map.removeLayer(this._polyline);
-      this._polyline = null;
+// ===============================
+// LOAD CSV
+// ===============================
+function loadCSV() {
+  Papa.parse("accounts.csv", {
+    download: true,
+    header: true,
+    complete: function (results) {
+      const data = results.data;
+      renderMarkers(data);
+      buildRepList(data);
     }
-  };
+  });
+}
 
-  Lasso.prototype._onMouseDown = function (e) {
-    this._polygon = [e.latlng];
-    this._polyline = L.polyline(this._polygon, {
-      color: "#000",
-      weight: 2
-    }).addTo(this._map);
+// ===============================
+// RENDER MARKERS
+// ===============================
+function renderMarkers(data) {
+  accountMarkers.forEach(m => map.removeLayer(m));
+  accountMarkers = [];
 
-    this._map.on("mousemove", this._onMouseMove);
-    this._map.on("mouseup", this._onMouseUp);
-  };
+  data.forEach(row => {
+    if (!row.Lat || !row.Lng) return;
 
-  Lasso.prototype._onMouseMove = function (e) {
-    var last = this._polygon[this._polygon.length - 1];
-    var ptLast = this._map.latLngToLayerPoint(last);
-    var ptNew = this._map.latLngToLayerPoint(e.latlng);
+    const marker = L.circleMarker([row.Lat, row.Lng], {
+      radius: 6,
+      color: reps[row.Rep]?.color || "#000",
+      weight: 2,
+      fillColor: reps[row.Rep]?.color || "#000",
+      fillOpacity: 0.8
+    });
 
-    if (distance(ptLast, ptNew) > 2) {
-      this._polygon.push(e.latlng);
-      this._polyline.setLatLngs(this._polygon);
+    marker.accountData = row;
+    marker.addTo(map);
+    accountMarkers.push(marker);
+  });
+}
+
+// ===============================
+// BUILD REP LIST (SIDEBAR)
+// ===============================
+function buildRepList(data) {
+  reps = {};
+
+  data.forEach(row => {
+    if (!reps[row.Rep]) {
+      reps[row.Rep] = {
+        name: row.Rep,
+        color: getRandomColor()
+      };
     }
-  };
+  });
 
-  Lasso.prototype._onMouseUp = function () {
-    this._map.off("mousemove", this._onMouseMove);
-    this._map.off("mouseup", this._onMouseUp);
+  const repList = document.getElementById("rep-list");
+  repList.innerHTML = "";
 
-    var poly = this._polygon;
-    if (poly.length > 2) {
-      var first = this._map.latLngToLayerPoint(poly[0]);
-      var last = this._map.latLngToLayerPoint(poly[poly.length - 1]);
-      if (!samePoint(first, last) && distance(first, last) < 10) {
-        poly.push(poly[0]);
-      }
-    }
+  Object.values(reps).forEach(rep => {
+    const div = document.createElement("div");
+    div.className = "rep-item";
+    div.dataset.rep = rep.name;
 
-    this._map.fire("lasso.finished", { latLngs: poly });
-    this._clear();
-  };
+    div.innerHTML = `
+      <span class="rep-color" style="background:${rep.color}"></span>
+      ${rep.name}
+    `;
 
-  L.lasso = function (map, options) {
-    return new Lasso(map, options || {});
-  };
+    div.onclick = () => {
+      selectedRep = rep.name;
+      highlightRep(rep.name);
+    };
+
+    repList.appendChild(div);
+  });
+}
+
+// ===============================
+// HIGHLIGHT SELECTED REP
+// ===============================
+function highlightRep(repName) {
+  accountMarkers.forEach(marker => {
+    const isMatch = marker.accountData.Rep === repName;
+    marker.setStyle({
+      fillOpacity: isMatch ? 1 : 0.2,
+      opacity: isMatch ? 1 : 0.2
+    });
+  });
+}
+
+// ===============================
+// RANDOM COLOR GENERATOR
+// ===============================
+function getRandomColor() {
+  return "#" + Math.floor(Math.random() * 16777215).toString(16);
+}
+
+// ===============================
+// LASSO SETUP
+// ===============================
+let lasso = L.lasso(map);
+
+document.getElementById("lasso-btn").onclick = () => {
+  lasso.enable();
+};
+
+// Fired when user finishes drawing
+map.on("lasso.finished", function (e) {
+  const poly = e.latLngs;
+
+  const inside = accountMarkers.filter(marker => {
+    return leafletPip.pointInLayer(marker.getLatLng(), L.polygon(poly)).length > 0;
+  });
+
+  console.log("Selected accounts:", inside.length);
 });
+
+// ===============================
+// START APP
+// ===============================
+loadCSV();
