@@ -1,82 +1,283 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Route & Rep Optimizer</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Territory Planning &amp; Optimization Tool</title>
 
-  <link rel="stylesheet" href="style.css">
-
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- Local Lasso -->
-  <script src="leaflet-lasso.min.js"></script>
-
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
-
-  <div id="top-bar">
-    <input type="file" id="file-input">
-
-    <select id="color-mode">
-      <option value="rep">Color by Rep</option>
-      <option value="segment">Color by Segment</option>
-      <option value="premise">Color by Premise</option>
-    </select>
-
-    <div id="rep-filter-container">
-      <button id="rep-filter-btn">Reps ▼</button>
-      <div id="rep-filter-dropdown" class="dropdown-hidden"></div>
-    </div>
-
-    <div class="search-container">
-      <input id="search-input" placeholder="Search by ID or Company">
-      <button id="search-btn">Search</button>
-    </div>
-
-    <select id="rep-select"></select>
-    <button id="assign-btn" disabled>Assign</button>
-
-    <button id="export-btn" disabled>Export CSV</button>
-  </div>
-
-  <div id="main">
-    <div id="map"></div>
-
-    <div id="sidebar">
-
-      <h3>Selection Summary</h3>
-      <div id="selection-summary">
-        <p><strong>Selected:</strong> <span id="selected-count">0</span></p>
-        <p><strong>Revenue:</strong> $<span id="selected-revenue">0.00</span></p>
-        <ul id="selected-list"></ul>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand-wrap">
+        <img
+          class="brand-logo"
+          alt="Romano Beverage"
+          src="romano-beverage-logo.png"
+          onerror="this.style.display='none';"
+        />
+        <div class="title">Territory Planning &amp; Optimization Tool</div>
       </div>
 
-      <h3>Details</h3>
-      <div id="detail-panel">
-        <p>No account selected.</p>
+      <div class="topbar-actions">
+        <label class="file-label" for="file-input">Upload Excel / CSV</label>
+        <input id="file-input" type="file" accept=".xlsx,.xls,.csv" />
+
+        <div class="upload-status-wrap">
+          <button id="upload-status-pill" type="button" class="upload-status-pill upload-status-neutral" aria-expanded="false">
+            <span id="upload-status-icon" class="upload-status-icon">•</span>
+            <span id="upload-status-text" class="upload-status-text">No file loaded</span>
+          </button>
+
+          <div id="upload-status-panel" class="upload-status-panel" hidden>
+            <div class="upload-status-panel-head">
+              <div class="upload-status-panel-title">Import diagnostics</div>
+            </div>
+            <div id="upload-status-body" class="upload-status-body"></div>
+          </div>
+        </div>
+
+        <select id="sheet-select" class="input" disabled></select>
+        <button id="load-sheet-btn" class="btn btn-subtle" disabled>Load Sheet</button>
+        <button id="undo-btn" class="btn btn-subtle" disabled>Undo</button>
+        <button id="reset-btn" class="btn btn-subtle" disabled>Reset All</button>
+        <button id="export-btn" class="btn btn-subtle" disabled>Export Excel</button>
+      </div>
+    </div>
+
+    <div class="controls-card">
+      <div class="controls-grid">
+        <div class="field">
+          <label>Assign selected to</label>
+          <select id="assign-rep-select"></select>
+        </div>
+
+        <div class="field multi" id="rep-filter-wrap">
+          <label>Rep filter</label>
+          <div class="multi-trigger" data-multi-trigger="rep">
+            <span class="multi-trigger-text" id="rep-filter-summary">All reps</span>
+            <span>▾</span>
+          </div>
+          <div class="multi-panel" data-multi-panel="rep">
+            <div class="multi-actions">
+              <button class="mini-btn" type="button" data-select-all="rep">Select all</button>
+              <input class="multi-search" type="text" placeholder="Search..." data-search="rep" />
+            </div>
+            <div class="multi-list" id="rep-filter-options"></div>
+          </div>
+        </div>
+
+        <div class="field multi" id="rank-filter-wrap">
+          <label>Rank filter</label>
+          <div class="multi-trigger" data-multi-trigger="rank">
+            <span class="multi-trigger-text" id="rank-filter-summary">All ranks</span>
+            <span>▾</span>
+          </div>
+          <div class="multi-panel" data-multi-panel="rank">
+            <div class="multi-actions">
+              <button class="mini-btn" type="button" data-select-all="rank">Select all</button>
+              <input class="multi-search" type="text" placeholder="Search..." data-search="rank" />
+            </div>
+            <div class="multi-list" id="rank-filter-options"></div>
+          </div>
+        </div>
+
+        <div class="field multi" id="chain-filter-wrap">
+          <label>Chain filter</label>
+          <div class="multi-trigger" data-multi-trigger="chain">
+            <span class="multi-trigger-text" id="chain-filter-summary">All chains</span>
+            <span>▾</span>
+          </div>
+          <div class="multi-panel" data-multi-panel="chain">
+            <div class="multi-actions">
+              <button class="mini-btn" type="button" data-select-all="chain">Select all</button>
+              <input class="multi-search" type="text" placeholder="Search..." data-search="chain" />
+            </div>
+            <div class="multi-list" id="chain-filter-options"></div>
+          </div>
+        </div>
+
+        <div class="field multi" id="segment-filter-wrap">
+          <label>Segment filter</label>
+          <div class="multi-trigger" data-multi-trigger="segment">
+            <span class="multi-trigger-text" id="segment-filter-summary">All segments</span>
+            <span>▾</span>
+          </div>
+          <div class="multi-panel" data-multi-panel="segment">
+            <div class="multi-actions">
+              <button class="mini-btn" type="button" data-select-all="segment">Select all</button>
+              <input class="multi-search" type="text" placeholder="Search..." data-search="segment" />
+            </div>
+            <div class="multi-list" id="segment-filter-options"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Premise filter</label>
+          <select id="premise-filter"></select>
+        </div>
+
+        <div class="field">
+          <label>Protected filter</label>
+          <select id="protected-filter">
+            <option value="ALL">All</option>
+            <option value="YES">Protected only</option>
+            <option value="NO">Unprotected only</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Moved filter</label>
+          <select id="moved-filter">
+            <option value="ALL">All</option>
+            <option value="MOVED">Moved only</option>
+            <option value="UNCHANGED">Unchanged only</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Target rep count</label>
+          <input id="rep-count-input" type="number" min="1" step="1" value="1" />
+        </div>
+
+        <div class="field">
+          <label>Minimum stops / rep</label>
+          <input id="min-stops-input" type="number" min="1" step="1" value="100" />
+        </div>
+
+        <div class="field">
+          <label>Maximum stops / rep</label>
+          <input id="max-stops-input" type="number" min="1" step="1" value="200" />
+        </div>
+
+        <div class="field">
+          <label>Optimize by</label>
+          <select id="balance-mode">
+            <option value="hybrid">Hybrid</option>
+            <option value="stops">Stops</option>
+            <option value="revenue">Revenue</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Customer disruption <span id="disruption-value">100</span></label>
+          <div class="range-wrap">
+            <input id="disruption-slider" type="range" min="0" max="100" step="1" value="100" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Accounts</div><div class="v" id="global-accounts">0</div></div>
+      <div class="stat"><div class="k">Revenue</div><div class="v" id="global-revenue">$0</div></div>
+      <div class="stat"><div class="k">Protected</div><div class="v" id="global-protected">0</div></div>
+      <div class="stat"><div class="k">Moved</div><div class="v" id="global-moved">0</div></div>
+      <div class="stat"><div class="k">Unchanged</div><div class="v" id="global-unchanged">0%</div></div>
+      <div class="stat"><div class="k">Avg Weekly Stops</div><div class="v" id="global-avg-weekly">0</div></div>
+      <div class="stat"><div class="k">Avg Weekly Stops / Rep</div><div class="v" id="global-avg-weekly-per-rep">0</div></div>
+    </div>
+
+    <div class="main">
+      <div class="card map-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Map</div>
+            <div class="card-sub">Use rectangle or polygon draw to lasso accounts</div>
+          </div>
+          <div class="map-actions">
+            <button id="assign-btn" class="btn btn-primary" disabled>Assign to Rep</button>
+            <button id="optimize-btn" class="btn btn-green" disabled>Optimize Routes</button>
+            <label class="inline-check"><input id="theme-toggle-check" type="checkbox" /> Dark Map</label>
+            <label class="inline-check"><input id="dim-others-checkbox" type="checkbox" checked /> Dim others</label>
+            <label class="inline-check"><input id="show-territory-checkbox" type="checkbox" /> Show territories</label>
+          </div>
+        </div>
+        <div id="map"></div>
       </div>
 
-      <h3>Rep Overview</h3>
-      <table id="route-table">
-        <thead>
-          <tr>
-            <th>Rep</th>
-            <th>Stops</th>
-            <th>Revenue</th>
-            <th>Avg</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="side">
+        <div class="card routes-card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Routes</div>
+              <div class="card-sub">Rep metrics update as assignments change</div>
+            </div>
+            <div class="small muted" id="last-action">No actions yet</div>
+          </div>
+          <div class="table-wrap" id="routes-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th data-sort="rep" class="sortable is-active asc">Rep <span class="sort-indicator">▲</span></th>
+                  <th data-sort="stops" class="sortable">Stops <span class="sort-indicator">↕</span></th>
+                  <th data-sort="deltaStops" class="sortable">+/- Stops <span class="sort-indicator">↕</span></th>
+                  <th data-sort="revenue" class="sortable">Revenue <span class="sort-indicator">↕</span></th>
+                  <th data-sort="deltaRevenue" class="sortable">+/- Revenue <span class="sort-indicator">↕</span></th>
+                  <th data-sort="A" class="sortable">A <span class="sort-indicator">↕</span></th>
+                  <th data-sort="B" class="sortable">B <span class="sort-indicator">↕</span></th>
+                  <th data-sort="C" class="sortable">C <span class="sort-indicator">↕</span></th>
+                  <th data-sort="D" class="sortable">D <span class="sort-indicator">↕</span></th>
+                  <th data-sort="planned4W" class="sortable">Planned 4W <span class="sort-indicator">↕</span></th>
+                  <th data-sort="avgWeekly" class="sortable">Avg Weekly <span class="sort-indicator">↕</span></th>
+                  <th data-sort="protected" class="sortable">Protected <span class="sort-indicator">↕</span></th>
+                  <th data-sort="movedIn" class="sortable">Moved In <span class="sort-indicator">↕</span></th>
+                  <th data-sort="movedOut" class="sortable">Moved Out <span class="sort-indicator">↕</span></th>
+                  <th>Lock</th>
+                </tr>
+              </thead>
+              <tbody id="rep-table-body">
+                <tr><td colspan="15" class="empty">Upload a file to begin.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
+        <div class="card selected-card">
+          <div class="selected-head">
+            <div>
+              <div class="card-title">Selected accounts</div>
+              <div class="card-sub"><span id="selection-count">0</span> selected • Current lasso / clicked selection</div>
+            </div>
+            <button id="clear-selection-btn" class="btn btn-subtle" disabled>Clear Selection</button>
+          </div>
+
+          <div class="selected-list" id="selection-preview">
+            <div class="empty">No accounts selected.</div>
+          </div>
+
+          <div class="moved-review">
+            <div class="moved-review-head">
+              <div>
+                <div class="moved-review-title">Moved accounts review</div>
+                <div class="moved-review-sub">Search moved accounts by customer, ID, original rep, or assigned rep</div>
+              </div>
+              <div class="small muted"><span id="moved-review-count">0</span> moved</div>
+            </div>
+
+            <div class="moved-search-wrap">
+              <input id="moved-search-input" class="moved-search-input" type="text" placeholder="Search moved accounts..." />
+            </div>
+
+            <div class="moved-review-list moved-review-list-compact" id="moved-review-list">
+              <div class="empty">No moved accounts yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <div id="toast" class="toast"></div>
   </div>
 
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/exceljs/dist/exceljs.min.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script src="app.js"></script>
-
 </body>
 </html>
